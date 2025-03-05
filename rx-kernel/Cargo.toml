@@ -1,0 +1,15 @@
+[package]
+name = "rx-kernel"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lazy_static = { version = "1.5.0", features = ["spin_no_std"] }
+spin = "0.9.8"
+uart_16550 = "0.3.2"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

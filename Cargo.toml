@@ -1,0 +1,3 @@
+[workspace]
+members = ["rx-kernel"]
+resolver = "3"
