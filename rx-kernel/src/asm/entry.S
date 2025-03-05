@@ -11,7 +11,7 @@ _entry:
     # with a 16KB stack per CPU.
     # sp = stack0 + (hartid * 16384)
     # PS: 16KB stack for few stack bump
-    la sp, stack0
+    la sp, STACK0
     li a0, 16384
 	csrr a1, mhartid
     addi a1, a1, 1
@@ -22,5 +22,3 @@ _entry:
 
     .section .data
     .align 4
-stack0:
-    .space 16384*8 # 8 is NCPU in param.rs

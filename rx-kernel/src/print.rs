@@ -35,3 +35,48 @@ fn panic_handler(info: &PanicInfo) -> ! {
 fn abort() -> ! {
     panic!("abort");
 }
+
+///
+/// implement a macro like std::dbg
+#[macro_export]
+#[allow(unused_macros)]
+macro_rules! dbg {
+    () => {
+        println!("[{}:{}]", file!(), line!());
+    };
+    ($val:expr) => {
+        match $val {
+            tmp => {
+                println!("[{}:{}] {} = {:#?}",
+                    file!(), line!(), stringify!($val), &tmp);
+                tmp
+            }
+        }
+    };
+    ($val:expr,) => { $crate::dbg!($val) };
+    ((val:expr),+ $(,)?) => {
+        (($crate::dbg!($val)),+,)
+    };
+}
+
+/// like `std::dbg` macro（16 Hexadecimal）
+#[macro_export]
+#[allow(unused_macros)]
+macro_rules! dbgx {
+    () => {
+        println!("[{}:{}]", file!(), line!());
+    };
+    ($val:expr) => {
+        match $val {
+            tmp => {
+                println!("[{}:{}] {} = {:#x?}",
+                    file!(), line!(), stringify!($val), &tmp);
+                tmp
+            }
+        }
+    };
+    ($val:expr,) => { dbgx!($val) };
+    ((val:expr),+ $(,)?) => {
+        ($(dbgx!($val)),+,)
+    };
+}
