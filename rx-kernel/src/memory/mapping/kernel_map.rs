@@ -4,15 +4,14 @@ use riscv::register;
 use crate::{
     arch::riscv::{
         qemu::layout::{
-            CLINT, E1000_REGS, ECAM, KERNEL_BASE, PGSHIFT, PGSIZE, PHYSTOP, PLIC_BASE, TRAMPOLINE,
-            UART0, VIRT_TEST, VIRTIO0,
+            CLINT, E1000_REGS, ECAM, KERNEL_BASE, PGSIZE, PHYSTOP, PLIC_BASE, TRAMPOLINE, UART0,
+            VIRT_TEST, VIRTIO0,
         },
-        register::{satp, sfence_vma},
+        register::sfence_vma,
     },
     memory::{
         RawPage,
-        address::{Addr, PhysicalAddress, VirtualAddress},
-        kalloc::ALLOCATOR,
+        address::{PhysicalAddress, VirtualAddress},
         mapping::pagetable_entry::PteFlags,
     },
     println,
@@ -51,6 +50,7 @@ pub unsafe fn init() {
     assert_eq!(align_of::<RawPage>(), align_of::<PageTable>());
 
     unsafe { kernel_map() };
+    // KERNEL_PAGETABLE.pgt.as_mut_unchecked().look();
     // KERNEL_PAGETABLE.pgt.as_ref_unchecked().debug(3, 0);
 }
 
@@ -61,7 +61,7 @@ pub unsafe fn init() {
 /// 仅用在内核初始化
 pub unsafe fn init_hart() {
     unsafe {
-        // sfence_vma();
+        sfence_vma();
         let r = KERNEL_PAGETABLE.pgt.as_ref_unchecked().as_satp();
         let s = register::satp::Satp::from_bits(r);
         println!(
@@ -71,7 +71,9 @@ pub unsafe fn init_hart() {
             s.ppn(),
             KERNEL_PAGETABLE.pgt.as_ref_unchecked().as_addr()
         );
+        // FIXME: 更改satp后PC就变成0了
         register::satp::write(s);
+        // 为什么PC在这里变成0？
         sfence_vma();
         println!("Write satp: {:#x}", r);
     }
@@ -86,7 +88,7 @@ unsafe fn kernel_map() {
         kp.kernel_map(
             VirtualAddress::new(VIRT_TEST),
             PhysicalAddress::new(VIRT_TEST),
-            PGSIZE * 2,
+            PGSIZE,
             PteFlags::R | PteFlags::W,
         );
 

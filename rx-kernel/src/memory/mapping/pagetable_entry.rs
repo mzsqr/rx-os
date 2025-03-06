@@ -31,6 +31,7 @@ pub const PTE_RS2: usize = 1 << 9;
 
 // TODO: make sure this struct has the same layout with usize
 #[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
 pub struct PageTableEntry(pub usize);
 
 bitflags! {
@@ -104,7 +105,7 @@ impl PageTableEntry {
     #[inline]
     pub fn is_leaf(&self) -> bool {
         let flag_bits = self.0 & (PteFlags::R | PteFlags::W | PteFlags::X).bits();
-        !(flag_bits == 0)
+        flag_bits != 0
     }
 
     #[inline]
@@ -127,8 +128,7 @@ impl PageTableEntry {
     // implement PTE2PA
     #[inline]
     pub fn as_pagetable(&self) -> *mut PageTable {
-        let ret = ((self.0 >> 10) << 12) as *mut PageTable;
-        ret
+        ((self.0 >> 10) << 12) as *mut PageTable
     }
 
     // implement PA2PTE

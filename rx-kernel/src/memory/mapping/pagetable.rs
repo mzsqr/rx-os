@@ -29,6 +29,7 @@ use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 use alloc::boxed::Box;
 
 use crate::{
+    STACK0,
     arch::riscv::qemu::layout::{MAXVA, PGSHIFT, PGSIZE, TRAMPOLINE, TRAPFRAME},
     memory::{
         PageAllocator, RawPage,
@@ -62,6 +63,12 @@ impl PageTable {
         Self {
             entries: [PageTableEntry(0); PGSIZE / 8],
         }
+    }
+
+    pub fn look(&mut self) {
+        let va = STACK0.as_ptr() as usize;
+        let e = self.translate(VirtualAddress::new(va), false).unwrap();
+        println!("{va:#x} {:#x}", e.as_pagetable() as usize);
     }
 
     pub fn debug(&self, _level: i32, virt: usize) {
@@ -127,7 +134,6 @@ impl PageTable {
                 panic!("pagetable free(): leaf not be removed");
             }
         });
-        //FIXME: 考虑在这种树形结构上如何销毁所有权
         // unsafe {
         //     let _ = Box::from_raw(self as *mut Self);
         // }
@@ -147,14 +153,15 @@ impl PageTable {
             if pte.is_valid() {
                 // 这里是安全的，以为已经确认了这个页表项指向已分配的有效物理地址
                 pgt = unsafe { &mut *(pte.as_pagetable()) };
-            } else if alloc {
+            } else {
+                if !alloc {
+                    return None;
+                }
                 // 这里分配一个页面
                 let zeroed_pgt = unsafe { Box::<PageTable>::new_zeroed().assume_init() };
                 pte.write_perm(PhysicalAddress(zeroed_pgt.as_addr()), PteFlags::empty());
                 // 之后需要手动管理这个页面
                 pgt = Box::leak(zeroed_pgt);
-            } else {
-                return None;
             }
         }
         Some(&mut pgt.entries[va.page_num(0)])
