@@ -12,6 +12,7 @@
 #![feature(alloc_error_handler)]
 #![feature(new_zeroed_alloc)]
 #![feature(box_as_ptr)]
+#![feature(unsafe_cell_access)]
 
 extern crate alloc;
 
@@ -128,6 +129,8 @@ unsafe extern "C" fn rust_main() {
             println!("rx-os kernel is booting!");
 
             memory::kalloc::init();
+            memory::mapping::kernel_map::init();
+            memory::mapping::kernel_map::init_hart();
 
             #[cfg(test)]
             test_main();

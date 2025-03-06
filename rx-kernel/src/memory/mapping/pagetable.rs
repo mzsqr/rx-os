@@ -35,7 +35,7 @@ use crate::{
         address::{Addr, PhysicalAddress, VirtualAddress},
         kalloc::ALLOCATOR,
     },
-    println,
+    print, println,
 };
 
 use super::{
@@ -62,6 +62,35 @@ impl PageTable {
         Self {
             entries: [PageTableEntry(0); PGSIZE / 8],
         }
+    }
+
+    pub fn debug(&self, _level: i32, virt: usize) {
+        self.entries.iter().enumerate().for_each(|(idx, e)| {
+            let va = (virt << 9) + (idx << 12);
+            if e.is_valid() && e.is_leaf() {
+                // for i in level..=3 {
+                //     print!(".");
+                // }
+
+                println!(
+                    "pte: {:#X} virtual: {:#X}, physical: {:#X}, flags: {:?}",
+                    e.as_usize(),
+                    va,
+                    e.as_pagetable() as usize,
+                    e.as_flags()
+                );
+                if va != TRAMPOLINE {
+                    assert_eq!(va, e.as_pagetable() as usize);
+                }
+            }
+            if e.is_valid() && !e.is_leaf() {
+                unsafe {
+                    let child_pgt = &mut *(e.as_pagetable());
+                    // 然后又进一步销毁它名下的所有表
+                    child_pgt.debug(_level - 1, va);
+                }
+            }
+        });
     }
 
     /// 将当前页表地址转为satp寄存器接受的页表地址
@@ -113,7 +142,7 @@ impl PageTable {
         }
 
         let mut pgt = self;
-        for level in 1..=2 {
+        for level in (1..=2).rev() {
             let pte = &mut pgt.entries[va.page_num(level)];
             if pte.is_valid() {
                 // 这里是安全的，以为已经确认了这个页表项指向已分配的有效物理地址
@@ -201,6 +230,7 @@ impl PageTable {
         size: usize,
         perm: PteFlags,
     ) {
+        // println!("{:#x} {:#x}", va.as_usize(), pa.as_usize());
         if !unsafe { self.map(va, pa, size, perm) } {
             panic!("内核虚拟地址映射失败");
         }
@@ -476,7 +506,7 @@ mod test {
         arch::riscv::qemu::layout::PGSIZE,
         memory::{
             PageAllocator, RawPage,
-            address::{PhysicalAddress, VirtualAddress},
+            address::{Addr, PhysicalAddress, VirtualAddress},
             kalloc::ALLOCATOR,
             mapping::pagetable_entry::{PTE_W, PteFlags},
         },
@@ -585,5 +615,27 @@ mod test {
         assert_eq!(data[PGSIZE], 255);
 
         pgt.ufree(PGSIZE * 2);
+    }
+
+    #[test_case]
+    fn same_mapping() {
+        let mut pgt = PageTable::unew();
+        let p1 = unsafe { RawPage::new_zeroed() };
+        let addr = p1 as *mut RawPage as usize;
+        unsafe {
+            pgt.kernel_map(
+                VirtualAddress::new(addr),
+                PhysicalAddress::new(addr),
+                PGSIZE,
+                PteFlags::W | PteFlags::R,
+            );
+        }
+        assert_eq!(
+            addr,
+            pgt.pgt_translate(VirtualAddress::new(addr))
+                .unwrap()
+                .as_usize()
+        );
+        pgt.uunmap(VirtualAddress::new(addr), 1, true);
     }
 }

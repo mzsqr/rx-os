@@ -3,8 +3,9 @@
 
 use crate::arch::riscv::qemu::layout::PGSIZE;
 
-mod pagetable;
-mod pagetable_entry;
+pub mod kernel_map;
+pub mod pagetable;
+pub mod pagetable_entry;
 
 pub fn page_round_up(addr: usize) -> usize {
     (addr + PGSIZE - 1) & !(PGSIZE - 1)
