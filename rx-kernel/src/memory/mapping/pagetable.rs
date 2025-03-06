@@ -34,9 +34,8 @@ use crate::{
     memory::{
         PageAllocator, RawPage,
         address::{Addr, PhysicalAddress, VirtualAddress},
-        kalloc::ALLOCATOR,
     },
-    print, println,
+    println,
 };
 
 use super::{
