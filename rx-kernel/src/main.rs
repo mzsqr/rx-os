@@ -1,28 +1,36 @@
+//! `rx-ox` 是一个模仿xv6的基于Rust实现的内核
+//! 目前实现的模块如下：
+//!     1. 测试框架
+//!     2. 内存管理
+//!
+
 #![no_std]
 #![no_main]
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test::test_runner)]
 #![reexport_test_harness_main = "test_main"]
+#![feature(alloc_error_handler)]
+#![feature(new_zeroed_alloc)]
+#![feature(box_as_ptr)]
+
+extern crate alloc;
 
 mod arch;
+mod asm;
 mod driver;
 mod logo;
+mod memory;
 mod print;
 mod process;
 mod shutdown;
 mod test;
 
-use core::{arch::global_asm, sync::atomic::AtomicBool};
+use core::sync::atomic::AtomicBool;
 
 use arch::riscv::qemu::{layout::PGSIZE, param::NCPU};
 use logo::LOGO;
 use process::cpu;
 use riscv::register::{self, medeleg::Medeleg, satp::Satp};
-
-global_asm!(include_str!("asm/entry.S"));
-global_asm!(include_str!("asm/kernelvec.S"));
-global_asm!(include_str!("asm/switch.S"));
-global_asm!(include_str!("asm/trampoline.S"));
 
 static mut TIMER_SCRATCH: [[u64; 5]; NCPU] = [[0u64; 5]; NCPU];
 static STARTED: AtomicBool = AtomicBool::new(false);
@@ -119,6 +127,8 @@ unsafe extern "C" fn rust_main() {
             println!("{}", LOGO);
             println!("rx-os kernel is booting!");
 
+            memory::kalloc::init();
+
             #[cfg(test)]
             test_main();
         }
@@ -126,9 +136,10 @@ unsafe extern "C" fn rust_main() {
 }
 
 /// temp
-///
 #[unsafe(no_mangle)]
-unsafe extern "C" fn kernel_trap() {}
+unsafe extern "C" fn kernel_trap() {
+    todo!("实现在trap模块中，处理来自内核的中断")
+}
 
 #[test_case]
 fn trivial_assertion() {
