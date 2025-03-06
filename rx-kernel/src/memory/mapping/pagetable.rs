@@ -22,7 +22,7 @@
 //!     ..  stack segment (4 pages default) RWU
 //!     ..  heap segment RWU
 //!     ..  trapframe (1 page) RW
-//!     ..MAXVA trap(trampoline) RX
+//!     ..  MAXVA trap(trampoline) RX
 
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 
@@ -150,7 +150,7 @@ impl PageTable {
         for level in (1..=2).rev() {
             let pte = &mut pgt.entries[va.page_num(level)];
             if pte.is_valid() {
-                // 这里是安全的，以为已经确认了这个页表项指向已分配的有效物理地址
+                // 这里是安全的，因为已经确认了这个页表项指向已分配的有效物理地址
                 pgt = unsafe { &mut *(pte.as_pagetable()) };
             } else {
                 if !alloc {
