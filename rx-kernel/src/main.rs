@@ -25,13 +25,18 @@ mod print;
 mod process;
 mod shutdown;
 mod test;
+mod trap;
 
 use core::sync::atomic::AtomicBool;
 
-use arch::riscv::qemu::{layout::PGSIZE, param::NCPU};
+use arch::riscv::{
+    qemu::{layout::PGSIZE, param::NCPU},
+    register::satp,
+};
 use logo::LOGO;
+use memory::mapping::kernel_map::KERNEL_PAGETABLE;
 use process::cpu;
-use riscv::register::{self, medeleg::Medeleg, satp::Satp};
+use riscv::register::{self, medeleg::Medeleg, mideleg::Mideleg, satp::Satp};
 
 static mut TIMER_SCRATCH: [[u64; 5]; NCPU] = [[0u64; 5]; NCPU];
 static STARTED: AtomicBool = AtomicBool::new(false);
@@ -43,7 +48,7 @@ pub static STACK0: [u8; PGSIZE * 4 * NCPU] = [0; PGSIZE * 4 * NCPU];
 /// 由entry.S调用
 /// 引导启动程序,进行寄存器的初始化操作
 #[unsafe(no_mangle)]
-pub unsafe fn start() -> ! {
+pub unsafe fn start() {
     unsafe {
         // Set M Previlege mode to Supervisor, for mret
         register::mstatus::set_mpp(register::mstatus::MPP::Supervisor);
@@ -57,7 +62,7 @@ pub unsafe fn start() -> ! {
 
         // delegate all interrupts and exceptions to supervisor mode.
         register::medeleg::write(Medeleg::from_bits(0xffff));
-        register::medeleg::write(Medeleg::from_bits(0xffff));
+        register::mideleg::write(Mideleg::from_bits(0xffff));
         arch::riscv::register::sie::intr_on();
 
         // configure Physical Memory Protection to give supervisor mode access to all of physical memory.
@@ -73,9 +78,6 @@ pub unsafe fn start() -> ! {
 
         // switch to supervisor mode and jump to main().
         core::arch::asm!("mret");
-
-        #[allow(clippy::empty_loop)]
-        loop {}
     }
 }
 
@@ -114,6 +116,17 @@ unsafe fn timer_init() {
 
         // enable machine-mode timer interrupts.
         register::mie::set_mtimer();
+
+        // register::mie::set_stimer();
+
+        // let mut x = 0_usize;
+        // core::arch::asm!("csrr {}, 0x30a", out(reg) x);
+        // x |= 1 << 63;
+        // core::arch::asm!("csrw 0x30a, {}", in(reg) x);
+        // register::mcounteren::set_tm();
+        // core::arch::asm!("csrr {}, 0x14d", out(reg) x);
+        // x += 1000000;
+        // core::arch::asm!("csrw 0x14d, {}", in(reg) x);
     }
 }
 
@@ -129,19 +142,21 @@ unsafe extern "C" fn rust_main() {
             println!("rx-os kernel is booting!");
 
             memory::kalloc::init();
+            #[cfg(test)]
+            test_main();
             memory::mapping::kernel_map::init();
             memory::mapping::kernel_map::init_hart();
 
-            #[cfg(test)]
-            test_main();
+            STARTED.store(true, core::sync::atomic::Ordering::SeqCst);
+        } else {
+            while !STARTED.load(core::sync::atomic::Ordering::SeqCst) {
+                core::hint::spin_loop()
+            }
+            memory::mapping::kernel_map::init_hart();
         }
     }
-}
-
-/// temp
-#[unsafe(no_mangle)]
-unsafe extern "C" fn kernel_trap() {
-    todo!("实现在trap模块中，处理来自内核的中断")
+    #[allow(clippy::empty_loop)]
+    loop {}
 }
 
 #[test_case]

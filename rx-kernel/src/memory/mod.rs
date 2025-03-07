@@ -26,14 +26,14 @@ pub trait PageAllocator: Sized {
     }
 }
 
-#[repr(C, align(0x1000))]
+#[repr(C, align(4096))]
 pub struct RawPage {
     data: [u8; PGSIZE],
 }
 
 impl PageAllocator for RawPage {}
 
-#[repr(C, align(0x1000))]
+#[repr(C, align(4096))]
 pub struct Stack {
     data: [u8; PGSIZE * 4],
 }

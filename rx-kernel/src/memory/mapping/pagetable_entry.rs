@@ -31,7 +31,6 @@ pub const PTE_RS2: usize = 1 << 9;
 
 // TODO: make sure this struct has the same layout with usize
 #[derive(Debug, Clone, Copy)]
-#[repr(transparent)]
 pub struct PageTableEntry(pub usize);
 
 bitflags! {
@@ -84,7 +83,7 @@ impl PageTableEntry {
 
     #[inline]
     pub fn is_user(&self) -> bool {
-        (self.0 & (PteFlags::V.bits())) > 0
+        (self.0 & (PteFlags::U.bits())) > 0
     }
 
     #[inline]

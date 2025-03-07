@@ -10,7 +10,7 @@ use core::alloc::Layout;
 
 use linked_list_allocator::LockedHeap;
 
-use crate::arch::riscv::qemu::layout::PHYSTOP;
+use crate::{arch::riscv::qemu::layout::PHYSTOP, println};
 
 use super::mapping::page_round_up;
 
@@ -32,6 +32,10 @@ pub unsafe fn init() {
     let heap_start = end as usize;
     let heap_start = page_round_up(heap_start);
     let heap_end = PHYSTOP;
+    println!(
+        "KernelHeap: available memory: [{:#x}, {:#x})",
+        heap_start, PHYSTOP
+    );
     unsafe {
         ALLOCATOR
             .lock()

@@ -1,5 +1,8 @@
 use core::cell::UnsafeCell;
-use riscv::register;
+
+use alloc::boxed::Box;
+use lazy_static::lazy_static;
+use riscv::{asm::sfence_vma_all, register};
 
 use crate::{
     arch::riscv::{
@@ -7,7 +10,7 @@ use crate::{
             CLINT, E1000_REGS, ECAM, KERNEL_BASE, PGSIZE, PHYSTOP, PLIC_BASE, TRAMPOLINE, UART0,
             VIRT_TEST, VIRTIO0,
         },
-        register::sfence_vma,
+        register::{satp, sfence_vma},
     },
     memory::{
         RawPage,
@@ -30,7 +33,7 @@ unsafe extern "C" {
 // 内核页表如果不会被同时访问，采用如下抽象
 
 pub struct KernelPageTable {
-    pgt: UnsafeCell<PageTable>,
+    pub pgt: UnsafeCell<PageTable>,
 }
 
 pub static KERNEL_PAGETABLE: KernelPageTable = KernelPageTable {
@@ -61,26 +64,32 @@ pub unsafe fn init() {
 /// 仅用在内核初始化
 pub unsafe fn init_hart() {
     unsafe {
-        sfence_vma();
-        let r = KERNEL_PAGETABLE.pgt.as_ref_unchecked().as_satp();
-        let s = register::satp::Satp::from_bits(r);
-        println!(
-            "{:?} {:?} {:#x} {:#x}",
-            s.asid(),
-            s.mode(),
-            s.ppn(),
-            KERNEL_PAGETABLE.pgt.as_ref_unchecked().as_addr()
-        );
-        // FIXME: 更改satp后PC就变成0了
-        register::satp::write(s);
+        // sfence_vma();
+        // sfence_vma_all();
+        let r = KERNEL_PAGETABLE.pgt.as_mut_unchecked().as_satp();
+        // let s = register::satp::Satp::from_bits(r);
+        // println!(
+        //     "{:?} {:?} {:#x} {:#x} {:#x}",
+        //     s.asid(),
+        //     s.mode(),
+        //     s.ppn(),
+        //     KERNEL_PAGETABLE.pgt.as_ref_unchecked().as_addr(),
+        //     r
+        // );
+        // // FIXME: 更改satp后PC就变成0了
+        // register::satp::write(s);
+
+        // satp::write(r);
+        // core::arch::asm!("csrw satp, {}", in(reg)r);
         // 为什么PC在这里变成0？
+        // sfence_vma_all();
         sfence_vma();
         println!("Write satp: {:#x}", r);
     }
 }
 
 unsafe fn kernel_map() {
-    println!("kernel page map");
+    println!("kernel page mapping");
 
     let kp = unsafe { KERNEL_PAGETABLE.pgt.as_mut_unchecked() };
 
@@ -130,7 +139,7 @@ unsafe fn kernel_map() {
         kp.kernel_map(
             VirtualAddress::new(PLIC_BASE),
             PhysicalAddress::new(PLIC_BASE),
-            0x400000,
+            0x4000000,
             PteFlags::R | PteFlags::W,
         );
 
@@ -156,5 +165,80 @@ unsafe fn kernel_map() {
         );
 
         // TODO: 其它进程的内核栈的映射
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use alloc::boxed::Box;
+
+    use super::*;
+    use crate::arch::riscv::register::satp;
+    use crate::{
+        arch::riscv::qemu::layout::PHYSTOP,
+        memory::{
+            address::{Addr, PhysicalAddress, VirtualAddress},
+            mapping::{page_round_down, pagetable::PageTable, pagetable_entry::PteFlags},
+        },
+        rust_main,
+    };
+
+    #[test_case]
+    fn test_kernel_map() {
+        let mut kp = PageTable::unew();
+        let kp = Box::leak(kp);
+        println!("kernel map here");
+        unsafe {
+            kp.kernel_map(
+                VirtualAddress::new(VIRT_TEST),
+                PhysicalAddress::new(VIRT_TEST),
+                PGSIZE,
+                PteFlags::R | PteFlags::W,
+            );
+
+            kp.kernel_map(
+                VirtualAddress::new(UART0),
+                PhysicalAddress::new(UART0),
+                PGSIZE,
+                PteFlags::R | PteFlags::W,
+            );
+
+            kp.kernel_map(
+                VirtualAddress::new(KERNEL_BASE),
+                PhysicalAddress::new(KERNEL_BASE),
+                etext as usize - KERNEL_BASE,
+                PteFlags::R | PteFlags::X,
+            );
+
+            kp.kernel_map(
+                VirtualAddress::new(etext as usize),
+                PhysicalAddress::new(etext as usize),
+                PHYSTOP - etext as usize,
+                PteFlags::R | PteFlags::W,
+            );
+
+            kp.kernel_map(
+                VirtualAddress::new(TRAMPOLINE),
+                PhysicalAddress::new(trampoline as usize),
+                PGSIZE,
+                PteFlags::R | PteFlags::X,
+            );
+
+            // TODO: 其它进程的内核栈的映射
+        }
+
+        // kp.debug(3, 0);
+
+        let addr_of_main = rust_main as usize;
+        let main_lookup = kp.translate(VirtualAddress::new(addr_of_main), false);
+        assert_eq!(
+            page_round_down(addr_of_main),
+            main_lookup.unwrap().as_pagetable() as usize
+        );
+
+        let addr = kp.as_satp();
+        unsafe { satp::write(addr) };
+        unsafe { sfence_vma() };
+        println!("Write satp");
     }
 }

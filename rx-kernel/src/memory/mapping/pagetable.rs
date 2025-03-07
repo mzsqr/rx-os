@@ -101,7 +101,8 @@ impl PageTable {
 
     /// 将当前页表地址转为satp寄存器接受的页表地址
     pub fn as_satp(&self) -> usize {
-        crate::arch::riscv::register::satp::SATP_SV39 | (self.as_addr() >> PGSHIFT)
+        crate::arch::riscv::register::satp::SATP_SV39
+            | ((self.entries.as_ptr() as usize) >> PGSHIFT)
     }
 
     #[inline]
@@ -141,7 +142,7 @@ impl PageTable {
     // TODO: 当采用巨页时需要修改此处，巨页的页表项的标志位会带有R/W/X
     /// 将虚拟地址翻译为物理地址，返回页表项
     /// 将alloc设置为true会同时分配相关的页表
-    fn translate(&mut self, va: VirtualAddress, alloc: bool) -> Option<&mut PageTableEntry> {
+    pub fn translate(&mut self, va: VirtualAddress, alloc: bool) -> Option<&mut PageTableEntry> {
         if va.as_usize() > MAXVA {
             return None;
         }
@@ -175,6 +176,8 @@ impl PageTable {
         }
 
         if let Some(pte) = self.translate(va, false) {
+            println!("{:}", pte.is_user());
+
             if !pte.is_valid() | !pte.is_user() {
                 return None;
             }
@@ -243,7 +246,8 @@ impl PageTable {
     }
 
     /// 创建空的用户进程页表
-    /// 当内存不足时 TODO: 内存不足时页表分配
+    /// 当内存不足时
+    /// TODO: 内存不足时页表分配
     pub fn unew() -> Box<PageTable> {
         unsafe { Box::new_zeroed().assume_init() }
     }
