@@ -484,6 +484,7 @@ impl PageTable {
     }
 
     pub fn proc_free_pagetable(&mut self, size: usize) {
+        // TODO: 或者这个放在进程表中
         self.uunmap(VirtualAddress::new(TRAMPOLINE), 1, false);
         self.uunmap(VirtualAddress::new(TRAPFRAME), 1, false);
         self.ufree(size);
@@ -637,7 +638,7 @@ mod test {
                 VirtualAddress::new(addr),
                 PhysicalAddress::new(addr),
                 PGSIZE,
-                PteFlags::W | PteFlags::R,
+                PteFlags::W | PteFlags::R | PteFlags::U,
             );
         }
         assert_eq!(

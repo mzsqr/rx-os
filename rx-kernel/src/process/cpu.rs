@@ -1,20 +1,28 @@
 use core::cell::UnsafeCell;
 
 use array_macro::array;
+use spin::MutexGuard;
 
-use crate::arch::riscv::{
-    qemu::param::NCPU,
-    register::{sstatus, tp},
+use crate::{
+    arch::riscv::{
+        qemu::param::NCPU,
+        register::{sstatus, tp},
+    },
+    println,
+    process::manager::PROC_MANAGER,
 };
 
-use super::context::Context;
+use super::{
+    context::Context,
+    process::{ProcMeta, ProcState, Process},
+};
 
 #[allow(clippy::upper_case_acronyms)]
 pub struct CPU {
-    pub process: Option<usize>, // The process running on this cpu, or null.
-    pub context: Context,       // swtch() here to enter scheduler().
-    pub noff: usize,            // Depth of push_off() nesting.
-    pub intena: bool,           // Were interrupts enabled before push_off()?
+    pub process: Option<&'static Process>, // The process running on this cpu, or null.
+    pub context: Context,                  // swtch() here to enter scheduler().
+    pub noff: usize,                       // Depth of push_off() nesting.
+    pub intena: bool,                      // Were interrupts enabled before push_off()?
 }
 
 impl CPU {
@@ -27,17 +35,61 @@ impl CPU {
         }
     }
 
-    pub fn set_proc(&mut self, proc: Option<usize>) {
+    pub fn set_proc(&mut self, proc: Option<&'static Process>) {
         self.process = proc;
     }
 
-    pub fn get_context_mut(&mut self) -> &mut Context {
-        &mut self.context
+    pub fn get_context_mut(&mut self) -> *mut Context {
+        &raw mut self.context
+    }
+
+    /// Switch to scheduler.  Must hold only p->lock
+    /// and have changed proc->state. Saves and restores
+    /// intena because intena is a property of this
+    /// kernel thread, not this CPU. It should
+    /// be proc->intena and proc->noff, but that would
+    /// break in the few places where a lock is held but
+    /// there's no process.
+    pub unsafe fn sched<'a>(
+        &mut self,
+        guard: MutexGuard<'a, ProcMeta>,
+        ctx: *mut Context,
+    ) -> MutexGuard<'a, ProcMeta> {
+        unsafe extern "C" {
+            fn switch(old: *mut Context, new: *mut Context);
+        }
+
+        if self.noff != 1 {
+            println!("self noff is {}", self.noff);
+            panic!("sched: cpu hold multiple locks");
+        }
+
+        if let ProcState::Running = guard.state {
+            panic!("sched: proc is running");
+        }
+
+        if unsafe { sstatus::intr_get() } {
+            panic!("sched: interruptible");
+        }
+
+        let intena = self.intena;
+        unsafe { switch(ctx, self.get_context_mut()) };
+
+        self.intena = intena;
+        guard
+    }
+
+    pub fn try_yield_proc(&mut self) {
+        if let Some(p) = self.process {
+            if let ProcState::Running = p.meta.lock().state {
+                p.yielding();
+            }
+        }
     }
 }
 
 /// internal data struct
-struct CPUManager {
+pub struct CPUManager {
     cpus: UnsafeCell<[CPU; NCPU]>,
 }
 
@@ -57,8 +109,52 @@ impl CPUManager {
     }
 
     /// 获取当前CPU
-    pub fn mycpu() -> &'static mut CPU {
+    pub unsafe fn mycpu() -> &'static mut CPU {
         unsafe { &mut CPU_MANAGER.cpus.as_mut_unchecked()[cpuid()] }
+    }
+
+    pub unsafe fn myproc() -> Option<&'static Process> {
+        push_off();
+        let c = unsafe { Self::mycpu() };
+        // in this immutable ref we can copy it
+        let p = c.process;
+        pop_off();
+        p
+    }
+
+    pub fn yield_proc() {
+        if let Some(my_proc) = unsafe { Self::myproc() } {
+            let st = my_proc.meta.lock().state;
+            if let ProcState::Running = st {
+                my_proc.yielding();
+            }
+        }
+    }
+
+    pub unsafe fn scheduler() {
+        unsafe extern "C" {
+            fn switch(old: *mut Context, new: *mut Context);
+        }
+
+        let c = unsafe { Self::mycpu() };
+        loop {
+            unsafe { sstatus::intr_on() };
+            // use seek runnable is not fair
+            for p in &PROC_MANAGER.proc {
+                if let ProcState::Runnable = p.state() {
+                    c.set_proc(Some(p));
+                    let mut g = p.meta.lock();
+                    g.state = ProcState::Running;
+                    unsafe {
+                        switch(
+                            c.get_context_mut(),
+                            &mut p.data.as_mut_unchecked().context as *mut _,
+                        );
+                    }
+                    c.set_proc(None);
+                }
+            }
+        }
     }
 }
 
@@ -77,7 +173,7 @@ pub fn push_off() {
         old_enable = sstatus::intr_get();
         sstatus::intr_off();
     }
-    let my_cpu = CPUManager::mycpu();
+    let my_cpu = unsafe { CPUManager::mycpu() };
     if my_cpu.noff == 0 {
         my_cpu.intena = old_enable;
     }
@@ -89,7 +185,7 @@ pub fn pop_off() {
     if unsafe { sstatus::intr_get() } {
         panic!("pop_off(): interruptable");
     }
-    let c = CPUManager::mycpu();
+    let c = unsafe { CPUManager::mycpu() };
     if c.noff.checked_sub(1).is_none() {
         panic!("pop_off(): count not match");
     }

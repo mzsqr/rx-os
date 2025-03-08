@@ -1,7 +1,10 @@
-use core::{cell::UnsafeCell, ptr::null_mut};
+use core::{
+    cell::UnsafeCell,
+    ptr::{self, null_mut},
+};
 
 use alloc::boxed::Box;
-use spin::Mutex;
+use spin::{Mutex, MutexGuard};
 
 use crate::{
     arch::riscv::{
@@ -12,10 +15,11 @@ use crate::{
         address::{PhysicalAddress, VirtualAddress},
         mapping::{pagetable::PageTable, pagetable_entry::PteFlags},
     },
+    println,
     process::cpu::cpuid,
 };
 
-use super::{context::Context, trapframe::Trapframe};
+use super::{context::Context, cpu::CPUManager, manager::PROC_MANAGER, trapframe::Trapframe};
 
 #[derive(Clone, Copy)]
 pub enum ProcState {
@@ -60,7 +64,7 @@ pub struct ProcData {
     pub pagetable: Option<Box<PageTable>>,
     pub trapframe: *mut Trapframe, // trampoline.S 使用的数据页面
     pub context: Context,          // switch() 用这里保存的数据恢复现场
-    pub name: [u8; 16],            // 进程名
+    pub name: &'static str,        // 进程名
     // parent
     pub id: usize, // 用于索引进程表以确定父子关系
                    // open_files
@@ -75,7 +79,7 @@ impl ProcData {
             pagetable: None,
             trapframe: null_mut(),
             context: Context::new(),
-            name: [0; 16],
+            name: "",
             id,
         }
     }
@@ -84,8 +88,8 @@ impl ProcData {
         self.trapframe
     }
 
-    pub fn set_name(&mut self, name: &str) {
-        self.name.copy_from_slice(name.as_bytes());
+    pub fn set_name(&mut self, name: &'static str) {
+        self.name = name;
     }
 
     // set parent
@@ -174,8 +178,8 @@ impl ProcData {
 }
 
 pub struct Process {
-    meta: Mutex<ProcMeta>,
-    data: UnsafeCell<ProcData>,
+    pub meta: Mutex<ProcMeta>,
+    pub data: UnsafeCell<ProcData>,
 }
 
 /// 保存在data中的数据是在修改meta之后访问的
@@ -217,7 +221,7 @@ impl Process {
     }
 
     pub fn name(&self) -> &str {
-        str::from_utf8(unsafe { &self.data.as_ref_unchecked().name }).unwrap()
+        unsafe { self.data.as_ref_unchecked().name }
     }
 
     pub fn page_table(&mut self) -> &mut PageTable {
@@ -240,6 +244,7 @@ impl Process {
 
         if let Some(mut pgt) = pdata.pagetable.take() {
             // TODO: this function should be paired in the page table
+            // TODO: 将进程大小保存在页表中
             pgt.proc_free_pagetable(pdata.size);
             // this page table is freed automatic
         }
@@ -278,5 +283,61 @@ impl Process {
         Ok(())
     }
 
-    pub fn yielding(&mut self) {}
+    pub fn yielding(&self) {
+        let mut pmeta = self.meta.lock();
+        pmeta.set_state(ProcState::Runnable);
+        unsafe {
+            let c = CPUManager::mycpu();
+            c.sched(pmeta, self.data.as_mut_unchecked().get_context_mut());
+        }
+    }
+
+    pub fn sleep<T>(&self, chan: usize, lock: MutexGuard<'_, T>) {
+        let mut g = self.meta.lock();
+        drop(lock);
+
+        g.chan = chan;
+        g.set_state(ProcState::Sleeping);
+        unsafe {
+            let c = CPUManager::mycpu();
+            let ctx = self.data.as_mut_unchecked().get_context_mut();
+            g = c.sched(g, ctx);
+            g.chan = 0;
+        }
+    }
+
+    pub fn fork(&self) -> Option<&Self> {
+        if let Some(proc) = unsafe { PROC_MANAGER.alloc_proc() } {
+            let pdata = unsafe { self.data.as_mut_unchecked() };
+            let cdata = unsafe { proc.data.as_mut_unchecked() };
+            if let Some((pgt, ch_pgt)) = pdata
+                .pagetable
+                .as_deref_mut()
+                .zip(cdata.pagetable.as_deref_mut())
+            {
+                unsafe {
+                    pgt.ucopy(ch_pgt, pdata.size)
+                        .expect("fork: Failed to copy data from parent process.")
+                };
+            }
+
+            let ptf = pdata.trapframe as *const _;
+            let ch_ptf = cdata.trapframe;
+            unsafe {
+                *ch_ptf = *ptf;
+                (*ch_ptf).a0 = 0;
+            }
+
+            // TODO: Files
+
+            proc.meta.lock().set_state(ProcState::Runnable);
+
+            PROC_MANAGER.wait_list.lock()[pdata.id] = self as *const Process as usize;
+
+            Some(proc)
+        } else {
+            println!("[rx-os] fork: No process available");
+            None
+        }
+    }
 }
