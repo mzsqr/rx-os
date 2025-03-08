@@ -1,7 +1,9 @@
 use core::sync::atomic::AtomicUsize;
 
 use array_macro::array;
-use spin::{Mutex, Once};
+use spin::Once;
+
+use crate::lock::Mutex;
 
 use crate::{
     arch::riscv::qemu::{
@@ -39,7 +41,7 @@ impl ProcManager {
             proc: array![id => Process::new(id);NPROC],
             pids: AtomicUsize::new(0),
             init_proc: Once::new(),
-            wait_list: Mutex::new([0; NPROC]),
+            wait_list: Mutex::new([0; NPROC], "Wait List"),
         }
     }
 

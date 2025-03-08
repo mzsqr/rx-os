@@ -14,11 +14,7 @@ use crate::{
         register::sstatus,
     },
     println,
-    process::{
-        cpu::{CPUManager, cpuid},
-        manager::ProcManager,
-    },
-    shutdown::{self, RESET_REASON_SYSTEM_FAILURE, RESET_TYPE_SHUTDOWN},
+    process::cpu::{CPUManager, cpuid},
 };
 
 pub static TICKS: AtomicUsize = AtomicUsize::new(0);

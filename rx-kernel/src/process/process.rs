@@ -1,10 +1,7 @@
-use core::{
-    cell::UnsafeCell,
-    ptr::{self, null_mut},
-};
+use core::{cell::UnsafeCell, ptr::null_mut};
 
+use crate::lock::{Mutex, MutexGuard};
 use alloc::boxed::Box;
-use spin::{Mutex, MutexGuard};
 
 use crate::{
     arch::riscv::{
@@ -190,7 +187,7 @@ unsafe impl Sync for Process {}
 impl Process {
     pub const fn new(id: usize) -> Self {
         Self {
-            meta: Mutex::new(ProcMeta::new()),
+            meta: Mutex::new(ProcMeta::new(), "Process Mutex"),
             data: UnsafeCell::new(ProcData::new(id)),
         }
     }

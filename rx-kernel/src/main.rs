@@ -19,6 +19,7 @@ extern crate alloc;
 mod arch;
 mod asm;
 mod driver;
+mod lock;
 mod logo;
 mod memory;
 mod print;
@@ -146,6 +147,7 @@ unsafe extern "C" fn rust_main() {
             memory::mapping::kernel_map::init();
             memory::mapping::kernel_map::init_hart();
             process::manager::init();
+            trap::init_hart();
 
             STARTED.store(true, core::sync::atomic::Ordering::SeqCst);
         } else {
@@ -154,6 +156,7 @@ unsafe extern "C" fn rust_main() {
             }
             println!("hart {} starting\n", cpu::cpuid());
             memory::mapping::kernel_map::init_hart();
+            trap::init_hart();
         }
     }
     #[allow(clippy::empty_loop)]

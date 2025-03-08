@@ -1,7 +1,7 @@
 use core::cell::UnsafeCell;
 
+use crate::lock::MutexGuard;
 use array_macro::array;
-use spin::MutexGuard;
 
 use crate::{
     arch::riscv::{
