@@ -79,7 +79,7 @@ pub unsafe fn init_hart() {
         // // FIXME: 更改satp后PC就变成0了
         // register::satp::write(s);
 
-        // satp::write(r);
+        satp::write(r);
         // core::arch::asm!("csrw satp, {}", in(reg)r);
         // 为什么PC在这里变成0？
         // sfence_vma_all();

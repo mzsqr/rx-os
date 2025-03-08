@@ -29,20 +29,19 @@ mod trap;
 
 use core::sync::atomic::AtomicBool;
 
-use arch::riscv::{
-    qemu::{layout::PGSIZE, param::NCPU},
-    register::satp,
-};
+use arch::riscv::qemu::{layout::PGSIZE, param::NCPU};
 use logo::LOGO;
-use memory::mapping::kernel_map::KERNEL_PAGETABLE;
 use process::cpu;
 use riscv::register::{self, medeleg::Medeleg, mideleg::Mideleg, satp::Satp};
 
 static mut TIMER_SCRATCH: [[u64; 5]; NCPU] = [[0u64; 5]; NCPU];
 static STARTED: AtomicBool = AtomicBool::new(false);
+// 为什么非要把这个连接到数据段才行呢？
+// FIXME: Rust的静态变量默认被链接到？
+#[unsafe(link_section = ".data")]
 #[allow(unused)]
 #[unsafe(no_mangle)]
-pub static STACK0: [u8; PGSIZE * 4 * NCPU] = [0; PGSIZE * 4 * NCPU];
+pub static STACK0: [u8; PGSIZE * 4 * 8] = [0; PGSIZE * 4 * 8];
 
 /// # Safety
 /// 由entry.S调用
@@ -152,6 +151,7 @@ unsafe extern "C" fn rust_main() {
             while !STARTED.load(core::sync::atomic::Ordering::SeqCst) {
                 core::hint::spin_loop()
             }
+            println!("hart {} starting\n", cpu::cpuid());
             memory::mapping::kernel_map::init_hart();
         }
     }
