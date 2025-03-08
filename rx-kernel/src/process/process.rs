@@ -1,0 +1,282 @@
+use core::{cell::UnsafeCell, ptr::null_mut};
+
+use alloc::boxed::Box;
+use spin::Mutex;
+
+use crate::{
+    arch::riscv::{
+        qemu::layout::{PGSIZE, TRAMPOLINE, TRAPFRAME},
+        register::satp,
+    },
+    memory::{
+        address::{PhysicalAddress, VirtualAddress},
+        mapping::{pagetable::PageTable, pagetable_entry::PteFlags},
+    },
+    process::cpu::cpuid,
+};
+
+use super::{context::Context, trapframe::Trapframe};
+
+#[derive(Clone, Copy)]
+pub enum ProcState {
+    Unused,
+    Used,
+    Sleeping,
+    Runnable,
+    Running,
+    Zombie,
+    Allocated,
+}
+
+pub struct ProcMeta {
+    pub state: ProcState,
+    pub chan: usize, // If non-zero, sleeping on chan.
+    pub killed: bool,
+    // TODO: Maybe use Result
+    pub xstate: usize, // Exit status to be returned to parent's wait
+    pub pid: usize,    // 进程号，和下面的索引号不同
+}
+
+impl ProcMeta {
+    pub const fn new() -> Self {
+        Self {
+            state: ProcState::Unused,
+            chan: 0,
+            killed: false,
+            xstate: 0,
+            pid: 0,
+        }
+    }
+
+    pub fn set_state(&mut self, state: ProcState) {
+        self.state = state
+    }
+}
+
+pub struct ProcData {
+    // TODO: 用指针表示这个栈是否更加方便
+    pub kstack: usize, // 内核栈的虚拟地址
+    pub size: usize,   // 进程占用内存大小
+    pub pagetable: Option<Box<PageTable>>,
+    pub trapframe: *mut Trapframe, // trampoline.S 使用的数据页面
+    pub context: Context,          // switch() 用这里保存的数据恢复现场
+    pub name: [u8; 16],            // 进程名
+    // parent
+    pub id: usize, // 用于索引进程表以确定父子关系
+                   // open_files
+                   // cwd
+}
+
+impl ProcData {
+    pub const fn new(id: usize) -> Self {
+        Self {
+            kstack: 0,
+            size: 0,
+            pagetable: None,
+            trapframe: null_mut(),
+            context: Context::new(),
+            name: [0; 16],
+            id,
+        }
+    }
+
+    pub fn get_trapframe(&self) -> *mut Trapframe {
+        self.trapframe
+    }
+
+    pub fn set_name(&mut self, name: &str) {
+        self.name.copy_from_slice(name.as_bytes());
+    }
+
+    // set parent
+
+    pub fn set_kstack(&mut self, kstack: usize) {
+        self.kstack = kstack;
+    }
+
+    pub fn set_trapframe(&mut self, trapframe: *mut Trapframe) {
+        self.trapframe = trapframe
+    }
+
+    pub fn set_pagetable(&mut self, pgt: Box<PageTable>) {
+        self.pagetable.replace(pgt);
+    }
+
+    pub fn set_context(&mut self, ctx: Context) {
+        self.context = ctx;
+    }
+
+    pub fn get_context_mut(&mut self) -> &mut Context {
+        &mut self.context
+    }
+
+    pub fn init_context(&mut self) {
+        let kstack = self.kstack;
+        self.context.write_zero();
+        // TODO: write forkret
+        // self.context.write_ra();
+        self.context.write_sp(kstack + PGSIZE);
+    }
+
+    /// 为给定进程分配一个页表
+    /// 不分配实际内存，会映射Trapoline和Trapframe页面
+    ///
+    /// # Safety
+    /// 要提前分配Trapframe
+    pub unsafe fn proc_pagetable(&mut self) -> Option<&mut PageTable> {
+        unsafe extern "C" {
+            fn trapoline();
+        }
+
+        let mut pgt = PageTable::unew();
+        // TODO: chain this error with Option in map function
+        if !unsafe {
+            pgt.map(
+                VirtualAddress::new(TRAMPOLINE),
+                PhysicalAddress::new(trapoline as usize),
+                0,
+                PteFlags::R | PteFlags::X,
+            )
+        } {
+            pgt.ufree(0);
+            return None;
+        }
+
+        if !unsafe {
+            pgt.map(
+                VirtualAddress::new(TRAPFRAME),
+                PhysicalAddress::new(self.trapframe as usize),
+                PGSIZE,
+                PteFlags::R | PteFlags::W,
+            )
+        } {
+            pgt.ufree(0);
+            return None;
+        }
+
+        self.pagetable = Some(pgt);
+
+        self.pagetable.as_deref_mut()
+    }
+
+    pub fn user_init(&mut self) {
+        unsafe extern "C" {
+            fn user_trap();
+        }
+
+        let tf = unsafe { &mut *self.trapframe };
+
+        tf.kernel_satp = unsafe { satp::read() }; // TODO: stack size
+        tf.kernel_sp = self.kstack + PGSIZE * 4;
+        tf.kernel_trap = user_trap as usize;
+        tf.kernel_hartid = unsafe { cpuid() };
+    }
+}
+
+pub struct Process {
+    meta: Mutex<ProcMeta>,
+    data: UnsafeCell<ProcData>,
+}
+
+/// 保存在data中的数据是在修改meta之后访问的
+/// 由于meta中的数据能够保证一致性
+/// 所以随后的访问是安全的
+unsafe impl Sync for Process {}
+
+impl Process {
+    pub const fn new(id: usize) -> Self {
+        Self {
+            meta: Mutex::new(ProcMeta::new()),
+            data: UnsafeCell::new(ProcData::new(id)),
+        }
+    }
+
+    pub fn init(&self, kstack: usize) {
+        let pdata = unsafe { self.data.as_mut_unchecked() };
+        pdata.kstack = kstack;
+    }
+
+    pub fn killed(&self) -> bool {
+        self.meta.lock().killed
+    }
+
+    pub fn pid(&self) -> usize {
+        self.meta.lock().pid
+    }
+
+    pub fn set_state(&self, state: ProcState) {
+        self.meta.lock().set_state(state);
+    }
+
+    pub fn set_killed(&self, killed: bool) {
+        self.meta.lock().killed = killed;
+    }
+
+    pub fn state(&self) -> ProcState {
+        self.meta.lock().state
+    }
+
+    pub fn name(&self) -> &str {
+        str::from_utf8(unsafe { &self.data.as_ref_unchecked().name }).unwrap()
+    }
+
+    pub fn page_table(&mut self) -> &mut PageTable {
+        unsafe { self.data.as_mut_unchecked().pagetable.as_mut().unwrap() }
+    }
+
+    pub fn proc_pagetable(&self) -> Option<&mut PageTable> {
+        unsafe { self.data.as_mut_unchecked().proc_pagetable() }
+    }
+
+    pub fn free_proc(&mut self) {
+        let pdata = unsafe { self.data.as_mut_unchecked() };
+
+        // the trapframe page allocated should be free
+        // TODO: we change the trapframe to be owned
+        // now let us assume it is leaked
+        unsafe {
+            let _ = Box::from_raw(pdata.trapframe);
+        }
+
+        if let Some(mut pgt) = pdata.pagetable.take() {
+            // TODO: this function should be paired in the page table
+            pgt.proc_free_pagetable(pdata.size);
+            // this page table is freed automatic
+        }
+        pdata.size = 0;
+        // TODO: parent should be modified
+
+        let mut meta = self.meta.lock();
+        meta.pid = 0;
+        meta.chan = 0;
+        meta.killed = false;
+        meta.xstate = 0;
+        meta.set_state(ProcState::Unused);
+    }
+
+    pub fn grow_proc(&self, count: isize) -> Result<(), &'static str> {
+        let pdata = unsafe { self.data.as_mut_unchecked() };
+        let mut size = pdata.size;
+        if let Some(pgt) = pdata.pagetable.as_deref_mut() {
+            match count.cmp(&0) {
+                core::cmp::Ordering::Less => {
+                    let nsz = (size as isize + count) as usize;
+                    size = pgt.udealloc(size, nsz);
+                }
+                core::cmp::Ordering::Equal => {}
+                core::cmp::Ordering::Greater => {
+                    if let Some(nsz) = unsafe { pgt.ualloc(size, size + count as usize) } {
+                        size = nsz;
+                    } else {
+                        return Err("Fail to allocate virtual memory for user");
+                    }
+                }
+            }
+        }
+        pdata.size = size;
+
+        Ok(())
+    }
+
+    pub fn yielding(&mut self) {}
+}

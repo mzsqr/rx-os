@@ -3,6 +3,7 @@ use crate::println;
 pub mod clint;
 pub mod satp;
 pub mod sie;
+pub mod sstatus;
 pub mod tp;
 
 #[inline]

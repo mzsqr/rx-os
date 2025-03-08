@@ -145,6 +145,7 @@ unsafe extern "C" fn rust_main() {
             test_main();
             memory::mapping::kernel_map::init();
             memory::mapping::kernel_map::init_hart();
+            process::manager::init();
 
             STARTED.store(true, core::sync::atomic::Ordering::SeqCst);
         } else {

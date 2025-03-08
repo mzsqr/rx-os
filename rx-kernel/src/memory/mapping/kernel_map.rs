@@ -1,8 +1,6 @@
 use core::cell::UnsafeCell;
 
-use alloc::boxed::Box;
-use lazy_static::lazy_static;
-use riscv::{asm::sfence_vma_all, register};
+use riscv::asm::sfence_vma_all;
 
 use crate::{
     arch::riscv::{
@@ -18,6 +16,7 @@ use crate::{
         mapping::pagetable_entry::PteFlags,
     },
     println,
+    process::manager::PROC_MANAGER,
 };
 
 use super::pagetable::PageTable;
@@ -64,27 +63,11 @@ pub unsafe fn init() {
 /// 仅用在内核初始化
 pub unsafe fn init_hart() {
     unsafe {
-        // sfence_vma();
-        // sfence_vma_all();
+        sfence_vma_all();
         let r = KERNEL_PAGETABLE.pgt.as_mut_unchecked().as_satp();
-        // let s = register::satp::Satp::from_bits(r);
-        // println!(
-        //     "{:?} {:?} {:#x} {:#x} {:#x}",
-        //     s.asid(),
-        //     s.mode(),
-        //     s.ppn(),
-        //     KERNEL_PAGETABLE.pgt.as_ref_unchecked().as_addr(),
-        //     r
-        // );
-        // // FIXME: 更改satp后PC就变成0了
-        // register::satp::write(s);
 
         satp::write(r);
-        // core::arch::asm!("csrw satp, {}", in(reg)r);
-        // 为什么PC在这里变成0？
-        // sfence_vma_all();
         sfence_vma();
-        println!("Write satp: {:#x}", r);
     }
 }
 
@@ -164,7 +147,7 @@ unsafe fn kernel_map() {
             PteFlags::R | PteFlags::X,
         );
 
-        // TODO: 其它进程的内核栈的映射
+        PROC_MANAGER.proc_mapstacks();
     }
 }
 
