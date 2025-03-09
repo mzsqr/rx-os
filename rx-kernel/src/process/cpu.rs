@@ -135,12 +135,17 @@ impl CPUManager {
         unsafe extern "C" {
             fn switch(old: *mut Context, new: *mut Context);
         }
-
         let c = unsafe { Self::mycpu() };
+        println!("{}", c.process.is_none());
         loop {
             unsafe { sstatus::intr_on() };
+
             // use seek runnable is not fair
             for p in &PROC_MANAGER.proc {
+                if unsafe { cpuid() } == 0 {
+                    println!("scheduler {}", unsafe { p.data.as_ref_unchecked().id });
+                }
+
                 if let ProcState::Runnable = p.state() {
                     c.set_proc(Some(p));
                     let mut g = p.meta.lock();

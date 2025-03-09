@@ -185,9 +185,9 @@ pub struct Process {
 unsafe impl Sync for Process {}
 
 impl Process {
-    pub const fn new(id: usize) -> Self {
+    pub const fn new(id: usize, name: &'static str) -> Self {
         Self {
-            meta: Mutex::new(ProcMeta::new(), "Process Mutex"),
+            meta: Mutex::new(ProcMeta::new(), name),
             data: UnsafeCell::new(ProcData::new(id)),
         }
     }

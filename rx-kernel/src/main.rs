@@ -30,9 +30,12 @@ mod trap;
 
 use core::sync::atomic::AtomicBool;
 
-use arch::riscv::qemu::{layout::PGSIZE, param::NCPU};
+use arch::riscv::{
+    qemu::{layout::PGSIZE, param::NCPU},
+    register::sstatus,
+};
 use logo::LOGO;
-use process::cpu;
+use process::cpu::{self, CPUManager};
 use riscv::register::{self, medeleg::Medeleg, mideleg::Mideleg, satp::Satp};
 
 static mut TIMER_SCRATCH: [[u64; 5]; NCPU] = [[0u64; 5]; NCPU];
@@ -118,15 +121,6 @@ unsafe fn timer_init() {
         register::mie::set_mtimer();
 
         // register::mie::set_stimer();
-
-        // let mut x = 0_usize;
-        // core::arch::asm!("csrr {}, 0x30a", out(reg) x);
-        // x |= 1 << 63;
-        // core::arch::asm!("csrw 0x30a, {}", in(reg) x);
-        // register::mcounteren::set_tm();
-        // core::arch::asm!("csrr {}, 0x14d", out(reg) x);
-        // x += 1000000;
-        // core::arch::asm!("csrw 0x14d, {}", in(reg) x);
     }
 }
 
@@ -150,6 +144,7 @@ unsafe extern "C" fn rust_main() {
             trap::init_hart();
 
             STARTED.store(true, core::sync::atomic::Ordering::SeqCst);
+            sstatus::intr_on();
         } else {
             while !STARTED.load(core::sync::atomic::Ordering::SeqCst) {
                 core::hint::spin_loop()
@@ -158,9 +153,8 @@ unsafe extern "C" fn rust_main() {
             memory::mapping::kernel_map::init_hart();
             trap::init_hart();
         }
+        CPUManager::scheduler();
     }
-    #[allow(clippy::empty_loop)]
-    loop {}
 }
 
 #[test_case]

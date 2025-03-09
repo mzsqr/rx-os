@@ -14,7 +14,11 @@ use crate::{
         register::sstatus,
     },
     println,
-    process::cpu::{CPUManager, cpuid},
+    process::cpu::{self, CPUManager, cpuid},
+    shutdown::{
+        REBOOT, RESET_REASON_NO_REASON, RESET_TYPE_COLD_REBOOT, RESET_TYPE_SHUTDOWN, SHUTDOWN,
+        system_reset,
+    },
 };
 
 pub static TICKS: AtomicUsize = AtomicUsize::new(0);
@@ -136,7 +140,7 @@ pub unsafe fn user_trap_ret() {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kernel_trap(
+pub unsafe fn kernel_trap(
     _: usize,
     _: usize,
     _: usize,
@@ -144,7 +148,7 @@ pub unsafe extern "C" fn kernel_trap(
     _: usize,
     _: usize,
     _: usize,
-    which: usize,
+    which: usize, // save in x17
 ) {
     let sepc = sepc::read();
     let st = unsafe { sstatus::read() };
@@ -161,15 +165,63 @@ pub unsafe extern "C" fn kernel_trap(
 
     let mut local_spec = sepc;
     match scause.cause().try_into().unwrap() {
-        scause::Trap::Exception(Exception::Breakpoint) => {}
-        scause::Trap::Exception(Exception::LoadFault) => {}
-        scause::Trap::Exception(Exception::LoadPageFault) => {}
-        scause::Trap::Exception(Exception::StorePageFault) => {}
-        scause::Trap::Exception(Exception::SupervisorEnvCall) => {}
-        scause::Trap::Exception(Exception::InstructionFault) => {}
-        scause::Trap::Exception(Exception::InstructionPageFault) => {}
-        scause::Trap::Interrupt(Interrupt::SupervisorExternal) => {}
-        scause::Trap::Interrupt(Interrupt::SupervisorSoft) => {}
+        scause::Trap::Exception(Exception::Breakpoint) => {
+            local_spec += 2;
+            println!("Breakpoint");
+        }
+        scause::Trap::Exception(Exception::LoadFault) => panic!("Load Fault"),
+        scause::Trap::Exception(Exception::LoadPageFault) => {
+            panic!(
+                "[Panic] Load Page Fault!\n stval: {:#x}\n sepc: {:#x}\n",
+                stval, sepc
+            );
+        }
+        scause::Trap::Exception(Exception::StorePageFault) => {
+            panic!(
+                "[Panic] Store Page Fault!\n stval: {:#x}\n sepc: {:#x}\n",
+                stval, sepc
+            );
+        }
+        scause::Trap::Exception(Exception::SupervisorEnvCall) => match which {
+            SHUTDOWN => {
+                println!("\x1b[1;31mShutdown!\x1b[0m");
+                system_reset(RESET_TYPE_SHUTDOWN, RESET_REASON_NO_REASON);
+            }
+
+            REBOOT => {
+                println!("\x1b[1;31mReboot!\x1b[0m");
+                system_reset(RESET_TYPE_COLD_REBOOT, RESET_REASON_NO_REASON);
+            }
+
+            _ => {
+                panic!("Unresolved Kernel syscall");
+            }
+        },
+        scause::Trap::Exception(Exception::InstructionFault) => {
+            panic!("Instruction Fault, sepc: 0x{:x}", sepc)
+        }
+        scause::Trap::Exception(Exception::InstructionPageFault) => {
+            panic!(
+                "[Panic] Instruction Page Fault: sepc: {:#x} stval: {:#x}",
+                sepc, stval
+            );
+        }
+        scause::Trap::Interrupt(Interrupt::SupervisorExternal) => {
+            // 设备中断
+            // like user_trap
+        }
+        scause::Trap::Interrupt(Interrupt::SupervisorSoft) => {
+            // 时钟中断
+            unsafe {
+                if cpu::cpuid() == 0 {
+                    clock_intr();
+                }
+            }
+
+            unsafe { register::sip::clear_ssoft() };
+
+            unsafe { CPUManager::mycpu() }.try_yield_proc();
+        }
         _ => {
             panic!("Unresolved Trap!")
         }

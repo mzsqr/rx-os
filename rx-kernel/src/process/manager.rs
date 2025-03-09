@@ -38,7 +38,7 @@ pub static PROC_MANAGER: ProcManager = ProcManager::new();
 impl ProcManager {
     pub const fn new() -> Self {
         Self {
-            proc: array![id => Process::new(id);NPROC],
+            proc: array![id => Process::new(id, "Proc mutex");NPROC],
             pids: AtomicUsize::new(0),
             init_proc: Once::new(),
             wait_list: Mutex::new([0; NPROC], "Wait List"),
