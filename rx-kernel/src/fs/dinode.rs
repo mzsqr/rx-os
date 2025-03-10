@@ -1,4 +1,4 @@
-//! Inode
+//! 磁盘上的Inode结构
 
 use core::ptr;
 
