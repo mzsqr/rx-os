@@ -142,9 +142,9 @@ impl CPUManager {
 
             // use seek runnable is not fair
             for p in &PROC_MANAGER.proc {
-                if unsafe { cpuid() } == 0 {
-                    println!("scheduler {}", unsafe { p.data.as_ref_unchecked().id });
-                }
+                // if unsafe { cpuid() } == 0 {
+                //     println!("scheduler {}", unsafe { p.data.as_ref_unchecked().id });
+                // }
 
                 if let ProcState::Runnable = p.state() {
                     c.set_proc(Some(p));

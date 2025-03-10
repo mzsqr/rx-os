@@ -1,5 +1,7 @@
 use core::mem::size_of;
 
+use crate::fs::dinode::DiskInode;
+
 /// magic number indentifying this specific file system
 pub const FSMAGIC: u32 = 0x10203040;
 /// size of disk block
@@ -34,7 +36,7 @@ pub const MAXFILE: usize = NDIRECT + NINDIRECT;
 pub const DIRSIZ: usize = 14;
 
 /// TODO: Inodes per block.
-// pub const IPB: usize = BSIZE / size_of::<DiskInode>();
+pub const IPB: usize = BSIZE / size_of::<DiskInode>();
 
 /// Bitmap bits per block
 pub const BPB: u32 = (BSIZE * 8) as u32;

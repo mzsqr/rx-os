@@ -289,7 +289,7 @@ impl Process {
         }
     }
 
-    pub fn sleep<T>(&self, chan: usize, lock: MutexGuard<'_, T>) {
+    pub fn sleep<T: ?Sized>(&self, chan: usize, lock: MutexGuard<'_, T>) {
         let mut g = self.meta.lock();
         drop(lock);
 

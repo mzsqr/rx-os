@@ -22,7 +22,7 @@ pub struct MutexGuard<'a, T: ?Sized + 'a> {
     lock: &'a AtomicBool,
     cpuid: &'a Cell<isize>,
     name: &'static str,
-    data: *mut T,
+    pub data: *mut T,
 }
 
 unsafe impl<T: ?Sized + Send> Sync for Mutex<T> {}
