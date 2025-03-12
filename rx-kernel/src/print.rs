@@ -1,11 +1,11 @@
 use core::{fmt, panic::PanicInfo};
 
-use crate::driver;
+use crate::driver::{self, uart::UART};
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    driver::console::UART.lock().write_fmt(args).unwrap();
+    UART.lock().write_fmt(args).unwrap();
 }
 
 #[macro_export]
