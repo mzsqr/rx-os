@@ -18,6 +18,7 @@ use super::{
     bitmap::BitMap,
     dinode::{DirEntry, DiskInode, InodeType},
     log::Log,
+    stat::Stat,
     superblock::SuperBlock,
 };
 
@@ -281,6 +282,15 @@ impl InodeData {
     }
 
     /// 返回Inode状态
+    pub fn stat(&self) -> Stat {
+        Stat {
+            dev: self.dev,
+            inum: self.inum,
+            itype: self.dinode.itype,
+            nlink: self.dinode.nlink,
+            size: self.dinode.size as usize,
+        }
+    }
 
     /// 将Inode指向的数据删除
     ///     元信息中的长度置零
@@ -543,6 +553,7 @@ impl InodeData {
     }
 }
 
+#[derive(Debug)]
 pub struct Inode {
     pub dev: u32,
     pub inum: u32,
