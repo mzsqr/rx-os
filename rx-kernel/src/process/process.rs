@@ -1,6 +1,9 @@
 use core::{cell::UnsafeCell, ptr::null_mut};
 
-use crate::lock::{Mutex, MutexGuard};
+use crate::{
+    fs::inode::Inode,
+    lock::{Mutex, MutexGuard},
+};
 use alloc::boxed::Box;
 
 use crate::{
@@ -64,8 +67,8 @@ pub struct ProcData {
     pub name: &'static str,        // 进程名
     // parent
     pub id: usize, // 用于索引进程表以确定父子关系
-                   // open_files
-                   // cwd
+    // open_files
+    pub cwd: Option<Inode>, // cwd
 }
 
 impl ProcData {
@@ -78,6 +81,7 @@ impl ProcData {
             context: Context::new(),
             name: "",
             id,
+            cwd: None,
         }
     }
 

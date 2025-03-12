@@ -410,3 +410,33 @@ impl VirtIOBlkReq {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        arch::riscv::qemu::fs::BSIZE,
+        fs::{
+            bio::{BCACHE, BCache, Buf, BufData},
+            superblock::SuperBlock,
+        },
+        lock::{SleepMutex, SleepMutexGuard},
+        println,
+    };
+
+    use super::DISK;
+
+    // #[test_case]
+    // fn read_virtio() {
+    //     unsafe {
+    //         DISK.lock().init();
+    //         SuperBlock::init(1);
+    //         println!(
+    //             "{} {} {:?} {:?}",
+    //             SuperBlock::size(),
+    //             SuperBlock::read_bmp(),
+    //             SuperBlock::read_inode(),
+    //             SuperBlock::read_log()
+    //         );
+    //     }
+    // }
+}

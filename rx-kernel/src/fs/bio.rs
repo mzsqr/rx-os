@@ -13,7 +13,10 @@
 //! * Only one process at a time can use a buffer,
 //!     so do not keep them longer than necessary.
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::{
+    ptr::null_mut,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use array_macro::array;
 use spin::Mutex;
@@ -88,7 +91,17 @@ pub struct Buf<'a> {
     data: Option<SleepMutexGuard<'a, BufData>>,
 }
 
-impl Buf<'_> {
+impl<'a> Buf<'a> {
+    pub unsafe fn uninit(data: SleepMutexGuard<'a, BufData>) -> Self {
+        Self {
+            index: 0,
+            dev: 0,
+            blockno: 0,
+            rc_ptr: null_mut(),
+            data: Some(data),
+        }
+    }
+
     pub fn read_blockno(&self) -> u32 {
         self.blockno
     }
@@ -255,7 +268,7 @@ impl BufInner {
 pub struct BufData([u8; BSIZE]);
 
 impl BufData {
-    const fn new() -> Self {
+    pub const fn new() -> Self {
         Self([0; BSIZE])
     }
 }

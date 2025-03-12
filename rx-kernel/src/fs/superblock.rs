@@ -98,6 +98,7 @@ impl SuperBlock {
         (sb.logstart, sb.nlog)
     }
 
+    /// 磁盘上的总块数
     pub fn size() -> u32 {
         let sb = SUPER_BLOCK.read();
         sb.size

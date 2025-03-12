@@ -2,7 +2,17 @@
 
 use core::ptr;
 
-use crate::arch::riscv::qemu::fs::{DIRSIZ, NDIRECT};
+use crate::{
+    arch::riscv::qemu::fs::{DIRSIZ, IPB, NDIRECT},
+    fs::{bio::BCache, dinode, log::Log, superblock::SuperBlock},
+};
+
+use super::bio::Buf;
+
+#[inline]
+fn locate_inode_offset(inum: u32) -> isize {
+    inum as isize % IPB as isize
+}
 
 #[repr(u16)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -54,6 +64,32 @@ impl DiskInode {
         } else {
             Err(())
         }
+    }
+
+    pub fn alloc(dev: u32, itype: InodeType) -> u32 {
+        for inum in 1..SuperBlock::size() {
+            let (dinode, buf) = Self::find_inode(dev, inum);
+            if dinode.try_alloc(itype).is_ok() {
+                Log::write(buf);
+                return inum;
+            }
+        }
+
+        panic!("not enough inode to alloc");
+    }
+
+    pub fn find_inode(dev: u32, inum: u32) -> (&'static mut DiskInode, Buf<'static>) {
+        let blockno = SuperBlock::locate_inode(inum);
+        let offset = locate_inode_offset(inum);
+        let mut buf = BCache::read(dev, blockno);
+        let dinode = unsafe {
+            (buf.raw_data_mut() as *mut DiskInode)
+                .offset(offset)
+                .as_mut()
+                .unwrap()
+        };
+
+        (dinode, buf)
     }
 }
 

@@ -1,14 +1,11 @@
 use core::{
-    cell::{Cell, UnsafeCell},
+    cell::UnsafeCell,
     ops::{Deref, DerefMut},
 };
 
-use crate::process::{
-    cpu::CPUManager,
-    manager::{PROC_MANAGER, ProcManager},
-};
+use crate::process::{cpu::CPUManager, manager::PROC_MANAGER};
 
-use super::{Mutex, MutexGuard};
+use super::Mutex;
 
 pub struct SleepMutex<T: ?Sized> {
     locked: Mutex<bool>,
@@ -31,7 +28,7 @@ impl<T> SleepMutex<T> {
 
 pub struct SleepMutexGuard<'a, T: ?Sized + 'a> {
     data: *mut T,
-    guard: &'a Mutex<bool>,
+    guard: &'a SleepMutex<T>,
 }
 
 unsafe impl<T: ?Sized + Send> Send for SleepMutexGuard<'_, T> {}
@@ -51,7 +48,7 @@ impl<T: ?Sized> SleepMutex<T> {
         *guard = true;
         drop(guard);
         SleepMutexGuard {
-            guard: &self.locked,
+            guard: self,
             data: self.data.get(),
         }
     }
@@ -78,5 +75,11 @@ impl<T: ?Sized> Deref for SleepMutexGuard<'_, T> {
 impl<T: ?Sized> DerefMut for SleepMutexGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *self.data }
+    }
+}
+
+impl<T: ?Sized> Drop for SleepMutexGuard<'_, T> {
+    fn drop(&mut self) {
+        self.guard.unlock();
     }
 }

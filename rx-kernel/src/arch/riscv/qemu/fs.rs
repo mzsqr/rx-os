@@ -29,6 +29,7 @@ pub const FSSIZE: usize = 1000;
 pub const ROOTINUM: u32 = 1;
 
 pub const NDIRECT: usize = 12;
+// TODO: BSIZE/size_of::<u32>()
 pub const NINDIRECT: usize = BSIZE / 8;
 pub const MAXFILE: usize = NDIRECT + NINDIRECT;
 
