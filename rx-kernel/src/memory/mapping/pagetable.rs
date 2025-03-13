@@ -176,8 +176,6 @@ impl PageTable {
         }
 
         if let Some(pte) = self.translate(va, false) {
-            println!("{:}", pte.is_user());
-
             if !pte.is_valid() | !pte.is_user() {
                 return None;
             }
@@ -468,6 +466,40 @@ impl PageTable {
         loop {
             if count > dst.len() {
                 count = dst.len();
+            }
+            dst[..count].copy_from_slice(src);
+            dst = &mut dst[count..];
+            if dst.is_empty() {
+                break;
+            }
+            va.add_page();
+            pa = self.pgt_translate(va).unwrap();
+            count = PGSIZE;
+            src = unsafe { &mut *slice_from_raw_parts_mut(pa.as_mut_ptr(), PGSIZE) };
+        }
+
+        Ok(())
+    }
+
+    /// 处理src内容读取过程中可能为0的情况
+    /// 最多读取dst能存的最大值（dst.len())
+    pub fn copy_in_str(&mut self, mut dst: &mut [u8], mut src: usize) -> Result<(), &'static str> {
+        let mut va = VirtualAddress::new(src);
+        va.pg_round_down();
+
+        let mut count = PGSIZE - (src - va.as_usize());
+        let mut pa = self.pgt_translate(va).unwrap();
+        let mut src =
+            &unsafe { &*slice_from_raw_parts(pa.as_mut_ptr(), PGSIZE) }[src - va.as_usize()..];
+
+        loop {
+            if count > dst.len() {
+                count = dst.len();
+            }
+            if let Some((end_idx, _)) = src.iter().enumerate().find(|(_, x)| **x == 0) {
+                src = &src[..end_idx + 1];
+                count = end_idx + 1;
+                dst = &mut dst[..count]; // it will be empty after copy 
             }
             dst[..count].copy_from_slice(src);
             dst = &mut dst[count..];

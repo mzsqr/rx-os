@@ -14,6 +14,7 @@ use crate::arch::riscv::register::satp;
 // return-to-user path via usertrapret() doesn't return through
 // the entire kernel call stack.
 
+#[repr(C, align(8))]
 #[derive(Clone, Copy)]
 pub struct Trapframe {
     /*0 */ pub kernel_satp: usize, // kernel page table
@@ -30,14 +31,7 @@ pub struct Trapframe {
     /*88 */ pub t2: usize,
     /*96 */ pub s0: usize,
     /*104 */ pub s1: usize,
-    /*112 */ pub a0: usize,
-    /*120 */ pub a1: usize,
-    /*128 */ pub a2: usize,
-    /*136 */ pub a3: usize,
-    /*144 */ pub a4: usize,
-    /*152 */ pub a5: usize,
-    /*160 */ pub a6: usize,
-    /*168 */ pub a7: usize,
+    /*112 */ pub ax: [usize; 8],
     /*176 */ pub s2: usize,
     /*184 */ pub s3: usize,
     /*192 */ pub s4: usize,

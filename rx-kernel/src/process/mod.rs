@@ -1,5 +1,10 @@
+use cpu::CPUManager;
+
+use crate::{arch::riscv::qemu::fs::ROOTDEV, fs, trap::user_trap_ret};
+
 pub mod context;
 pub mod cpu;
+pub mod elf;
 pub mod manager;
 pub mod process;
 pub mod trapframe;
@@ -11,6 +16,18 @@ static INITCODE: [u8; 51] = [
     0x00, 0x00, 0x00,
 ];
 
-unsafe fn fork_ret() -> ! {
-    loop {}
+unsafe fn fork_ret() {
+    static mut FIRST: bool = true;
+
+    // 父进程执行过程中透过调度器必然会持有meta锁，所以这里要强制解锁
+    // 这和父进程是没有关联的
+    unsafe {
+        CPUManager::myproc().unwrap().meta.force_unlock();
+
+        if FIRST {
+            fs::init(ROOTDEV);
+            FIRST = false;
+        }
+        user_trap_ret()
+    };
 }

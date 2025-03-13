@@ -26,6 +26,7 @@ mod memory;
 mod print;
 mod process;
 mod shutdown;
+mod syscall;
 mod test;
 mod trap;
 
@@ -38,11 +39,6 @@ use arch::riscv::{
 use logo::LOGO;
 use process::cpu::{self, CPUManager};
 use riscv::register::{self, medeleg::Medeleg, mideleg::Mideleg, satp::Satp};
-use vga::{
-    colors::{Color16, TextModeColor},
-    vga::VGA,
-    writers::{ScreenCharacter, Text80x25, TextWriter},
-};
 
 static mut TIMER_SCRATCH: [[u64; 5]; NCPU] = [[0u64; 5]; NCPU];
 static STARTED: AtomicBool = AtomicBool::new(false);

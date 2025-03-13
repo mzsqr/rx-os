@@ -6,6 +6,11 @@
 //!     + Names: 路径
 //!
 
+use log::Log;
+use superblock::SuperBlock;
+
+use crate::println;
+
 pub mod bio;
 pub mod bitmap;
 pub mod devices;
@@ -16,3 +21,11 @@ pub mod log;
 pub mod pipe;
 pub mod stat;
 pub mod superblock;
+
+pub unsafe fn init(dev: u32) {
+    unsafe {
+        SuperBlock::init(dev);
+        Log::init(dev);
+        println!("file system: setup done");
+    }
+}

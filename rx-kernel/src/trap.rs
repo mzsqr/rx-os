@@ -1,4 +1,4 @@
-use core::sync::atomic::AtomicUsize;
+use core::ops::Add;
 
 use riscv::{
     interrupt::{Exception, Interrupt},
@@ -10,18 +10,26 @@ use riscv::{
 
 use crate::{
     arch::riscv::{
-        qemu::layout::{TRAMPOLINE, TRAPFRAME},
+        qemu::layout::{TRAMPOLINE, TRAPFRAME, UART0_IRQ, VIRTIO0_IRQ},
         register::sstatus,
     },
+    driver::{
+        plic::{plic_claim, plic_complete},
+        uart::UART,
+        virtio_disk::DISK,
+    },
+    lock::Mutex,
     println,
     process::cpu::{self, CPUManager, cpuid},
     shutdown::{
         REBOOT, RESET_REASON_NO_REASON, RESET_TYPE_COLD_REBOOT, RESET_TYPE_SHUTDOWN, SHUTDOWN,
         system_reset,
     },
+    syscall::syscall_handler,
 };
 
-pub static TICKS: AtomicUsize = AtomicUsize::new(0);
+pub static TICKS: Mutex<usize> = Mutex::new(0, "TICKS");
+
 unsafe extern "C" {
     fn kernelvec();
     fn uservec();
@@ -55,6 +63,21 @@ pub unsafe fn user_trap() {
                 // use plic claim
                 // from UART0
                 // from VIRTIO
+                if let Some(interrupt) = plic_claim() {
+                    match interrupt {
+                        VIRTIO0_IRQ => {
+                            DISK.lock().intr();
+                        }
+
+                        UART0_IRQ => {
+                            UART.intr();
+                        }
+                        _ => {
+                            panic!("Unresolved interrupt");
+                        }
+                    }
+                    plic_complete(interrupt);
+                }
             }
             // Clock interrupt
             scause::Trap::Interrupt(Interrupt::SupervisorSoft) => {
@@ -83,7 +106,7 @@ pub unsafe fn user_trap() {
                 // so don't enable until done with those registers.
                 unsafe { sstatus::intr_on() };
 
-                // TODO: handle syscall
+                syscall_handler();
             }
             _ => {
                 println!(
@@ -209,6 +232,21 @@ pub unsafe fn kernel_trap(
         scause::Trap::Interrupt(Interrupt::SupervisorExternal) => {
             // 设备中断
             // like user_trap
+            if let Some(interrupt) = plic_claim() {
+                match interrupt {
+                    VIRTIO0_IRQ => {
+                        DISK.lock().intr();
+                    }
+
+                    UART0_IRQ => {
+                        UART.intr();
+                    }
+                    _ => {
+                        panic!("Unresolved interrupt");
+                    }
+                }
+                plic_complete(interrupt);
+            }
         }
         scause::Trap::Interrupt(Interrupt::SupervisorSoft) => {
             // 时钟中断
@@ -234,5 +272,5 @@ pub unsafe fn kernel_trap(
 }
 
 pub unsafe fn clock_intr() {
-    TICKS.fetch_add(1, core::sync::atomic::Ordering::SeqCst);
+    let _ = TICKS.lock().add(1);
 }

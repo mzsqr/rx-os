@@ -1,10 +1,12 @@
 use core::{cell::UnsafeCell, ptr::null_mut};
 
 use crate::{
-    fs::inode::Inode,
+    arch::riscv::qemu::fs::NFILE,
+    fs::{inode::Inode, pipe::VFile},
     lock::{Mutex, MutexGuard},
 };
-use alloc::boxed::Box;
+use alloc::{boxed::Box, sync::Arc};
+use array_macro::array;
 
 use crate::{
     arch::riscv::{
@@ -19,9 +21,11 @@ use crate::{
     process::cpu::cpuid,
 };
 
-use super::{context::Context, cpu::CPUManager, manager::PROC_MANAGER, trapframe::Trapframe};
+use super::{
+    context::Context, cpu::CPUManager, fork_ret, manager::PROC_MANAGER, trapframe::Trapframe,
+};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ProcState {
     Unused,
     Used,
@@ -64,10 +68,10 @@ pub struct ProcData {
     pub pagetable: Option<Box<PageTable>>,
     pub trapframe: *mut Trapframe, // trampoline.S 使用的数据页面
     pub context: Context,          // switch() 用这里保存的数据恢复现场
-    pub name: &'static str,        // 进程名
+    pub name: [u8; 16],            // 进程名
     // parent
     pub id: usize, // 用于索引进程表以确定父子关系
-    // open_files
+    pub open_files: [Option<Arc<VFile>>; NFILE],
     pub cwd: Option<Inode>, // cwd
 }
 
@@ -79,8 +83,9 @@ impl ProcData {
             pagetable: None,
             trapframe: null_mut(),
             context: Context::new(),
-            name: "",
+            name: [0; 16],
             id,
+            open_files: array![_ => None; NFILE],
             cwd: None,
         }
     }
@@ -89,8 +94,9 @@ impl ProcData {
         self.trapframe
     }
 
-    pub fn set_name(&mut self, name: &'static str) {
-        self.name = name;
+    pub fn set_name(&mut self, name: &[u8]) {
+        let end = self.name.len().max(name.len());
+        self.name[..end].copy_from_slice(&name[..end]);
     }
 
     // set parent
@@ -118,8 +124,9 @@ impl ProcData {
     pub fn init_context(&mut self) {
         let kstack = self.kstack;
         self.context.write_zero();
-        // TODO: write forkret
-        // self.context.write_ra();
+        // write forkret
+        // child process will return user space from fork ret
+        self.context.write_ra(fork_ret as usize);
         self.context.write_sp(kstack + PGSIZE);
     }
 
@@ -128,7 +135,7 @@ impl ProcData {
     ///
     /// # Safety
     /// 要提前分配Trapframe
-    pub unsafe fn proc_pagetable(&mut self) -> Option<&mut PageTable> {
+    pub unsafe fn proc_pagetable(&mut self) -> Option<Box<PageTable>> {
         unsafe extern "C" {
             fn trapoline();
         }
@@ -159,9 +166,7 @@ impl ProcData {
             return None;
         }
 
-        self.pagetable = Some(pgt);
-
-        self.pagetable.as_deref_mut()
+        Some(pgt)
     }
 
     pub fn user_init(&mut self) {
@@ -175,6 +180,15 @@ impl ProcData {
         tf.kernel_sp = self.kstack + PGSIZE * 4;
         tf.kernel_trap = user_trap as usize;
         tf.kernel_hartid = unsafe { cpuid() };
+    }
+
+    pub fn find_unallocated_fd(&self) -> Result<usize, &'static str> {
+        for fd in 0..self.open_files.len() {
+            if self.open_files[fd].is_none() {
+                return Ok(fd);
+            }
+        }
+        Err("Failed to find unallocated fd")
     }
 }
 
@@ -221,19 +235,19 @@ impl Process {
         self.meta.lock().state
     }
 
-    pub fn name(&self) -> &str {
-        unsafe { self.data.as_ref_unchecked().name }
+    pub fn name(&self) -> &[u8] {
+        unsafe { &self.data.as_ref_unchecked().name }
     }
 
     pub fn page_table(&mut self) -> &mut PageTable {
         unsafe { self.data.as_mut_unchecked().pagetable.as_mut().unwrap() }
     }
 
-    pub fn proc_pagetable(&self) -> Option<&mut PageTable> {
+    pub fn proc_pagetable(&self) -> Option<Box<PageTable>> {
         unsafe { self.data.as_mut_unchecked().proc_pagetable() }
     }
 
-    pub fn free_proc(&mut self) {
+    pub fn free_proc(&self) {
         let pdata = unsafe { self.data.as_mut_unchecked() };
 
         // the trapframe page allocated should be free
@@ -307,6 +321,13 @@ impl Process {
         }
     }
 
+    pub fn fd_alloc(&self, file: &VFile) -> Result<usize, &'static str> {
+        let pdata = unsafe { self.data.as_mut_unchecked() };
+        let fd = pdata.find_unallocated_fd()?;
+        pdata.open_files[fd].replace(Arc::new(file.clone()));
+        Ok(fd)
+    }
+
     pub fn fork(&self) -> Option<&Self> {
         if let Some(proc) = unsafe { PROC_MANAGER.alloc_proc() } {
             let pdata = unsafe { self.data.as_mut_unchecked() };
@@ -326,10 +347,12 @@ impl Process {
             let ch_ptf = cdata.trapframe;
             unsafe {
                 *ch_ptf = *ptf;
-                (*ch_ptf).a0 = 0;
+                (*ch_ptf).ax[0] = 0;
             }
 
-            // TODO: Files
+            //  Files
+            cdata.open_files.clone_from(&pdata.open_files);
+            cdata.cwd.clone_from(&pdata.cwd);
 
             proc.meta.lock().set_state(ProcState::Runnable);
 

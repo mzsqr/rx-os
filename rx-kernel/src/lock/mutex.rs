@@ -9,7 +9,7 @@ use core::{
 use crate::process::cpu::{self, push_off};
 
 pub struct Mutex<T: ?Sized> {
-    pub(crate) lock: AtomicBool,
+    lock: AtomicBool,
     name: &'static str,
     cpu_id: Cell<isize>,
     data: UnsafeCell<T>,
@@ -73,8 +73,13 @@ impl<T: ?Sized> Mutex<T> {
 
     #[inline(always)]
     pub unsafe fn force_unlock(&self) {
-        self.lock
-            .store(false, core::sync::atomic::Ordering::Release);
+        if !self.holding() {
+            panic!("Spinmutex {} release", self.name);
+        }
+        self.cpu_id.set(-1);
+        fence(Ordering::SeqCst);
+        self.lock.store(false, Ordering::Release);
+        push_off();
     }
 
     #[inline(always)]
@@ -163,7 +168,9 @@ impl<T: ?Sized> DerefMut for MutexGuard<'_, T> {
 
 impl<T: ?Sized> Drop for MutexGuard<'_, T> {
     fn drop(&mut self) {
-        if self.cpuid.get() != unsafe { cpu::cpuid() as isize } {
+        if !self.lock.load(Ordering::Relaxed)
+            || self.cpuid.get() != unsafe { cpu::cpuid() as isize }
+        {
             panic!("Mutex {} release", self.name);
         }
         self.cpuid.set(-1);
