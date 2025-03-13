@@ -96,6 +96,7 @@ fn load_seg(
     Ok(())
 }
 
+// TODO: modify argv to contain str
 pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str> {
     let mut elf = ElfHeader::default();
     let mut ph = ProgHeader::default();

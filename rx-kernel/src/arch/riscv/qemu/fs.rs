@@ -57,6 +57,7 @@ pub fn mkdev(m: usize, n: usize) -> usize {
     (m << 16) | n
 }
 
+// TODO: rectify open mode
 #[repr(usize)]
 #[derive(Debug)]
 pub enum OpenMode {

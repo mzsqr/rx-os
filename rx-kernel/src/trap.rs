@@ -20,7 +20,10 @@ use crate::{
     },
     lock::Mutex,
     println,
-    process::cpu::{self, CPUManager, cpuid},
+    process::{
+        cpu::{self, CPUManager, cpuid},
+        exit,
+    },
     shutdown::{
         REBOOT, RESET_REASON_NO_REASON, RESET_TYPE_COLD_REBOOT, RESET_TYPE_SHUTDOWN, SHUTDOWN,
         system_reset,
@@ -80,24 +83,22 @@ pub unsafe fn user_trap() {
                 }
             }
             // Clock interrupt
-            scause::Trap::Interrupt(Interrupt::SupervisorSoft) => {
-                unsafe {
-                    if cpuid() == 0 {
-                        clock_intr();
-                    }
-                    register::sip::clear_ssoft();
-
-                    if p.killed() {
-                        // exit
-                    }
-
-                    p.yielding();
+            scause::Trap::Interrupt(Interrupt::SupervisorSoft) => unsafe {
+                if cpuid() == 0 {
+                    clock_intr();
                 }
-            }
+                register::sip::clear_ssoft();
+
+                if p.killed() {
+                    exit(-1);
+                }
+
+                p.yielding();
+            },
             // user system call
             scause::Trap::Exception(Exception::UserEnvCall) => {
                 if p.killed() {
-                    // exit
+                    exit(-1);
                 }
 
                 tf.update_epc(); // skip ecall 
@@ -119,7 +120,7 @@ pub unsafe fn user_trap() {
             }
         }
         if p.killed() {
-            // TODO: exit
+            exit(-1);
         }
 
         unsafe { user_trap_ret() }

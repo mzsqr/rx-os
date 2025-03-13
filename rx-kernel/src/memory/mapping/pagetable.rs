@@ -64,11 +64,11 @@ impl PageTable {
         }
     }
 
-    pub fn look(&mut self) {
-        let va = STACK0.as_ptr() as usize;
-        let e = self.translate(VirtualAddress::new(va), false).unwrap();
-        println!("{va:#x} {:#x}", e.as_pagetable() as usize);
-    }
+    // pub fn look(&mut self) {
+    //     let va = STACK0.as_ptr() as usize;
+    //     let e = self.translate(VirtualAddress::new(va), false).unwrap();
+    //     println!("{va:#x} {:#x}", e.as_pagetable() as usize);
+    // }
 
     pub fn debug(&self, _level: i32, virt: usize) {
         self.entries.iter().enumerate().for_each(|(idx, e)| {
@@ -271,7 +271,7 @@ impl PageTable {
             );
         }
 
-        mem.data.copy_from_slice(src);
+        mem.data[..src.len()].copy_from_slice(src);
     }
 
     /// 为用户分配页表项以及物理内存页面

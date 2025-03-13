@@ -10,7 +10,7 @@ use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 use alloc::boxed::Box;
 
 use crate::{
-    arch::riscv::qemu::layout::PGSIZE,
+    arch::riscv::qemu::layout::{PGSIZE, STACK_SIZE},
     process::{cpu::CPUManager, manager::PROC_MANAGER},
 };
 
@@ -40,7 +40,7 @@ impl PageAllocator for RawPage {}
 
 #[repr(C, align(4096))]
 pub struct Stack {
-    data: [u8; PGSIZE * 4],
+    data: [u8; STACK_SIZE],
 }
 
 impl PageAllocator for Stack {}
@@ -58,7 +58,7 @@ pub fn copy_to_kernel(
             .pagetable
             .as_deref_mut()
             .unwrap();
-        pgt.copy_in(dst, src);
+        let _ = pgt.copy_in(dst, src);
     } else {
         let src = unsafe { &*slice_from_raw_parts(src as *mut u8, count) };
         dst.copy_from_slice(src);

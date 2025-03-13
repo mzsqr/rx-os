@@ -56,8 +56,9 @@ pub const VIRT_TEST: usize = 0x100000;
 // for use by the kernel and user pages
 // from physical address 0x80000000 to PHYSTOP.
 
-// the size of memory: 128M
-pub const MEM_SIZE: usize = 128 * 1024 * 1024;
+// the size of memory: 1G
+// TODO: parse from divece tree
+pub const MEM_SIZE: usize = 8 * 128 * 1024 * 1024;
 pub const KERNEL_BASE: usize = 0x80000000;
 pub const PHYSTOP: usize = KERNEL_BASE + MEM_SIZE;
 
@@ -65,6 +66,7 @@ pub const PGSIZE: usize = 4096; // bytes per page
 pub const PGSHIFT: usize = 12; // bits of offset within a page
 pub const PGMASKLEN: usize = 9;
 pub const PGMASK: usize = 0x1FF;
+pub const STACK_SIZE: usize = PGSIZE * 16;
 
 /// One beyond the highest possible virtual address.
 /// MAXVA is actually one bit less than the max allowed by

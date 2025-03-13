@@ -1,7 +1,8 @@
 #include "include/types.h"
 #include "include/stat.h"
+#include "xv6-user/user.h"
 #include "include/fs.h"
-#include "user.h"
+#include "include/fcntl.h"
 
 char*
 fmtname(char *path)
@@ -30,7 +31,7 @@ ls(char *path)
   struct dirent de;
   struct stat st;
 
-  if((fd = open(path, 0)) < 0){
+  if((fd = open(path, O_RDONLY)) < 0){
     fprintf(2, "ls: cannot open %s\n", path);
     return;
   }
@@ -42,12 +43,12 @@ ls(char *path)
   }
 
   switch(st.type){
+  case T_DEVICE:
   case T_FILE:
-    printf("path: %s, dev: %d, inum: %d, nlink: %d, size: %l, type: %d\n", fmtname(path), st.dev, st.ino, st.nlink, st.size, st.type);
+    printf("%s %d %d %d\n", fmtname(path), st.type, st.ino, (int) st.size);
     break;
 
   case T_DIR:
-    // printf("path: %s, dev: %d, inum: %d, nlink: %d, size: %l, type: %d\n", fmtname(path), st.dev, st.ino, st.nlink, st.size, st.type);
     if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
       printf("ls: path too long\n");
       break;
@@ -56,16 +57,15 @@ ls(char *path)
     p = buf+strlen(buf);
     *p++ = '/';
     while(read(fd, &de, sizeof(de)) == sizeof(de)){
-      if(de.inum == 0){
+      if(de.inum == 0)
         continue;
-      }
       memmove(p, de.name, DIRSIZ);
       p[DIRSIZ] = 0;
       if(stat(buf, &st) < 0){
         printf("ls: cannot stat %s\n", buf);
         continue;
       }
-      printf("%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
+      printf("%s %d %d %d\n", fmtname(buf), st.type, st.ino, (int) st.size);
     }
     break;
   }

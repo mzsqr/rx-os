@@ -9,9 +9,9 @@
 
 #include "include/types.h"
 #include "include/stat.h"
+#include "xv6-user/user.h"
 #include "include/fs.h"
 #include "include/fcntl.h"
-#include "user.h"
 
 int
 main(int argc, char *argv[])
@@ -27,14 +27,13 @@ main(int argc, char *argv[])
     if(fork() > 0)
       break;
 
-  // printf("write %d\n", i);
+  printf("write %d\n", i);
 
   path[8] += i;
   fd = open(path, O_CREATE | O_RDWR);
-  for(i = 0; i < 20; i++){
-   printf("fd: %d\n", fd);
-   write(fd, data, sizeof(data));
-  }
+  for(i = 0; i < 20; i++)
+//    printf(fd, "%d\n", i);
+    write(fd, data, sizeof(data));
   close(fd);
 
   printf("read\n");

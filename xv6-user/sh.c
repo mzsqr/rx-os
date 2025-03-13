@@ -1,8 +1,8 @@
 // Shell.
 
 #include "include/types.h"
+#include "xv6-user/user.h"
 #include "include/fcntl.h"
-#include "user.h"
 
 // Parsed command representation
 #define EXEC  1
@@ -52,6 +52,7 @@ struct backcmd {
 int fork1(void);  // Fork but panics on failure.
 void panic(char*);
 struct cmd *parsecmd(char*);
+void runcmd(struct cmd*) __attribute__((noreturn));
 
 // Execute cmd.  Never returns.
 void
@@ -73,9 +74,8 @@ runcmd(struct cmd *cmd)
 
   case EXEC:
     ecmd = (struct execcmd*)cmd;
-    if(ecmd->argv[0] == 0){
+    if(ecmd->argv[0] == 0)
       exit(1);
-    }
     exec(ecmd->argv[0], ecmd->argv);
     fprintf(2, "exec %s failed\n", ecmd->argv[0]);
     break;
@@ -128,19 +128,17 @@ runcmd(struct cmd *cmd)
       runcmd(bcmd->cmd);
     break;
   }
-  printf("[User] childen process exit.\n");
   exit(0);
 }
 
 int
 getcmd(char *buf, int nbuf)
 {
-  fprintf(2, "xv6 Rust >>> ");
+  write(2, "$ ", 2);
   memset(buf, 0, nbuf);
   gets(buf, nbuf);
-  if(buf[0] == 0){ // EOF
+  if(buf[0] == 0) // EOF
     return -1;
-  }
   return 0;
 }
 

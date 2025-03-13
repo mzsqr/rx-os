@@ -5,6 +5,7 @@ use array_macro::array;
 use spin::Once;
 
 use crate::arch::riscv::qemu::fs::ROOTIPATH;
+use crate::arch::riscv::qemu::layout::{STACK_SIZE, TRAPFRAME};
 use crate::fs::inode::ICACHE;
 use crate::fs::log::Log;
 use crate::lock::Mutex;
@@ -83,7 +84,7 @@ impl ProcManager {
                 KERNEL_PAGETABLE.pgt.as_mut_unchecked().kernel_map(
                     VirtualAddress::new(va),
                     PhysicalAddress::new(pa),
-                    PGSIZE * 4,
+                    STACK_SIZE,
                     PteFlags::R | PteFlags::W,
                 )
             };
@@ -95,9 +96,10 @@ impl ProcManager {
 
         if let Some(p) = self.alloc_proc() {
             let pdata = unsafe { p.data.as_mut_unchecked() };
-            pdata.pagetable.as_mut().into_iter().for_each(|pgt| {
-                unsafe { pgt.uinit(&INITCODE) };
-            });
+            let pgt = pdata.pagetable.as_deref_mut().unwrap();
+            unsafe {
+                pgt.uinit(INITCODE);
+            };
             pdata.size = PGSIZE;
 
             let tf = unsafe { &mut *pdata.trapframe };
@@ -127,8 +129,8 @@ impl ProcManager {
                 // when you free it
                 // you should use RawPage other than Trapframe
                 pdata.set_trapframe(tf as *mut RawPage as *mut Trapframe);
+                pdata.pagetable = proc.proc_pagetable();
                 pdata.init_context();
-                proc.proc_pagetable();
                 return Some(proc);
             }
         }
@@ -137,12 +139,18 @@ impl ProcManager {
 
     pub fn wake_up(&self, channel: usize) {
         for p in self.proc.iter() {
+            if let Some(mp) = unsafe { CPUManager::myproc() } {
+                if core::ptr::eq(mp, p) {
+                    continue;
+                }
+            }
             let mut g = p.meta.lock();
             if let ProcState::Sleeping = g.state {
                 if g.chan == channel {
                     g.state = ProcState::Runnable;
                 }
             }
+            drop(g);
         }
     }
 
@@ -275,5 +283,5 @@ pub unsafe fn init() {
 
 #[inline]
 fn kernel_stack(pos: usize) -> usize {
-    TRAMPOLINE - (pos + 1) * 5 * PGSIZE
+    TRAPFRAME - (pos + 1) * (STACK_SIZE + PGSIZE)
 }

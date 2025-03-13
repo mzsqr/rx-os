@@ -33,7 +33,7 @@ impl Syscall<'_> {
         Ok(self.process.pid())
     }
 
-    pub fn sys_sbrk(&mut self) -> SysResult {
+    pub fn sys_sbrk(&self) -> SysResult {
         let size = self.arg(0);
         let pdata = unsafe { self.process.data.as_ref_unchecked() };
         let addr = pdata.size;

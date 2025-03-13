@@ -11,7 +11,7 @@
 //! * When done with the buffer, call brelse.
 //! * Do not use the buffer after calling brelse.
 //! * Only one process at a time can use a buffer,
-//!     so do not keep them longer than necessary.
+//!   so do not keep them longer than necessary.
 
 use core::{
     ptr::null_mut,
@@ -25,6 +25,7 @@ use crate::{
     arch::riscv::qemu::fs::{BSIZE, NBUF},
     driver::virtio_disk::DISK,
     lock::{SleepMutex, SleepMutexGuard},
+    println,
 };
 
 pub struct BCache {

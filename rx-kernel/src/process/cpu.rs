@@ -136,7 +136,6 @@ impl CPUManager {
             fn switch(old: *mut Context, new: *mut Context);
         }
         let c = unsafe { Self::mycpu() };
-        println!("{}", c.process.is_none());
         loop {
             unsafe { sstatus::intr_on() };
 
@@ -145,10 +144,11 @@ impl CPUManager {
                 // if unsafe { cpuid() } == 0 {
                 //     println!("scheduler {}", unsafe { p.data.as_ref_unchecked().id });
                 // }
-
-                if let ProcState::Runnable = p.state() {
+                let mut g = p.meta.lock();
+                // if let Some(mut g) = p.meta.try_lock() {
+                // println!("check {}", unsafe { p.data.as_ref_unchecked().id });
+                if let ProcState::Runnable = g.state {
                     c.set_proc(Some(p));
-                    let mut g = p.meta.lock();
                     g.state = ProcState::Running;
                     unsafe {
                         switch(
@@ -158,6 +158,8 @@ impl CPUManager {
                     }
                     c.set_proc(None);
                 }
+                drop(g);
+                // }
             }
         }
     }

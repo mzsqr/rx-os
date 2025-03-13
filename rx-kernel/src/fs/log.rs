@@ -48,7 +48,7 @@ impl Log {
         debug_assert_eq!(align_of::<BufData>() % align_of::<LogHeader>(), 0);
 
         let (start, nlog) = SuperBlock::read_log();
-        let mut g = LOG.lock();
+        let g = unsafe { &mut *LOG.raw_data_mut_unchecked() };
         g.start = start;
         g.size = nlog;
         g.dev = dev;

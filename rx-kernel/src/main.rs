@@ -2,6 +2,10 @@
 //! 目前实现的模块如下：
 //!     1. 测试框架
 //!     2. 内存管理
+//!     3. 进程管理
+//!     4. 自旋锁和睡眠锁
+//!     5. 文件系统
+//!     6. 系统调用
 //!
 
 #![no_std]
@@ -33,21 +37,27 @@ mod trap;
 use core::sync::atomic::AtomicBool;
 
 use arch::riscv::{
-    qemu::{layout::PGSIZE, param::NCPU},
+    qemu::{layout::STACK_SIZE, param::NCPU},
     register::sstatus,
 };
+use driver::{
+    plic::{plic_init, plic_init_hart},
+    virtio_disk::DISK,
+};
 use logo::LOGO;
-use process::cpu::{self, CPUManager};
+use process::{
+    cpu::{self, CPUManager},
+    manager::PROC_MANAGER,
+};
 use riscv::register::{self, medeleg::Medeleg, mideleg::Mideleg, satp::Satp};
 
 static mut TIMER_SCRATCH: [[u64; 5]; NCPU] = [[0u64; 5]; NCPU];
 static STARTED: AtomicBool = AtomicBool::new(false);
 // 为什么非要把这个连接到数据段才行呢？
-// FIXME: Rust的静态变量默认被链接到？
 #[unsafe(link_section = ".data")]
 #[allow(unused)]
 #[unsafe(no_mangle)]
-pub static STACK0: [u8; PGSIZE * 4 * 8] = [0; PGSIZE * 4 * 8];
+pub static mut STACK0: [u8; STACK_SIZE * NCPU] = [0; STACK_SIZE * NCPU];
 
 /// # Safety
 /// 由entry.S调用
@@ -146,6 +156,10 @@ unsafe extern "C" fn rust_main() {
             memory::mapping::kernel_map::init_hart();
             process::manager::init();
             trap::init_hart();
+            plic_init();
+            plic_init_hart();
+            DISK.lock().init();
+            PROC_MANAGER.user_init();
 
             STARTED.store(true, core::sync::atomic::Ordering::SeqCst);
             sstatus::intr_on();
@@ -156,6 +170,8 @@ unsafe extern "C" fn rust_main() {
             println!("hart {} starting\n", cpu::cpuid());
             memory::mapping::kernel_map::init_hart();
             trap::init_hart();
+            plic_init();
+            plic_init_hart();
         }
         CPUManager::scheduler();
     }

@@ -1,6 +1,9 @@
 use core::{fmt, panic::PanicInfo};
 
-use crate::driver::{self, uart::UART};
+use crate::{
+    driver::{self, uart::UART},
+    shutdown::shutdown,
+};
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
@@ -28,6 +31,7 @@ macro_rules! println {
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {
     println!("\x1b[1;31mpanic: '{}'\x1b[0m", info);
+    shutdown();
     loop {}
 }
 

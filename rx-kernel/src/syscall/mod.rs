@@ -21,6 +21,16 @@ pub fn syscall_handler() {
     let proc = unsafe { CPUManager::myproc().unwrap() };
 
     // call syscall
+    let syscall = Syscall { process: proc };
+    let ret = if let Ok(res) = syscall.syscall() {
+        res
+    } else {
+        -1_isize as usize
+    };
+    unsafe {
+        let tf = proc.data.as_ref_unchecked().trapframe;
+        (*tf).ax[0] = ret;
+    }
     // save return value in a0
 }
 
@@ -64,28 +74,28 @@ impl Syscall<'_> {
         let syscall_num = unsafe { (*pdata.trapframe).ax[7] };
         let syscall_num = SyscallNum::from_primitive(syscall_num);
         match syscall_num {
-            SyscallNum::SysFork => todo!(),
-            SyscallNum::SysExit => todo!(),
-            SyscallNum::SysWait => todo!(),
-            SyscallNum::SysPipe => todo!(),
-            SyscallNum::SysRead => todo!(),
-            SyscallNum::SysKill => todo!(),
-            SyscallNum::SysExec => todo!(),
-            SyscallNum::SysFstat => todo!(),
-            SyscallNum::SysChdir => todo!(),
-            SyscallNum::SysDup => todo!(),
-            SyscallNum::SysGetPid => todo!(),
-            SyscallNum::SysSbrk => todo!(),
-            SyscallNum::SysSleep => todo!(),
-            SyscallNum::SysUptime => todo!(),
-            SyscallNum::SysOpen => todo!(),
-            SyscallNum::SysWrite => todo!(),
-            SyscallNum::SysMknod => todo!(),
-            SyscallNum::SysUnlink => todo!(),
-            SyscallNum::SysLink => todo!(),
-            SyscallNum::SysMkdir => todo!(),
-            SyscallNum::SysClose => todo!(),
-            SyscallNum::Unknown => todo!(),
+            SyscallNum::SysFork => self.sys_fork(),
+            SyscallNum::SysExit => self.sys_exit(),
+            SyscallNum::SysWait => self.sys_wait(),
+            SyscallNum::SysPipe => unimplemented!(),
+            SyscallNum::SysRead => self.sys_read(),
+            SyscallNum::SysKill => unimplemented!(),
+            SyscallNum::SysExec => self.sys_exec(),
+            SyscallNum::SysFstat => self.sys_fstat(),
+            SyscallNum::SysChdir => self.sys_chdir(),
+            SyscallNum::SysDup => self.sys_dup(),
+            SyscallNum::SysGetPid => self.sys_getpid(),
+            SyscallNum::SysSbrk => self.sys_sbrk(),
+            SyscallNum::SysSleep => self.sys_sleep(),
+            SyscallNum::SysUptime => Ok(0),
+            SyscallNum::SysOpen => self.sys_open(),
+            SyscallNum::SysWrite => self.sys_write(),
+            SyscallNum::SysMknod => self.sys_mknod(),
+            SyscallNum::SysUnlink => self.sys_unlink(),
+            SyscallNum::SysLink => self.sys_link(),
+            SyscallNum::SysMkdir => self.sys_mkdir(),
+            SyscallNum::SysClose => self.sys_close(),
+            SyscallNum::Unknown => unimplemented!(),
         }
     }
 

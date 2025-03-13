@@ -1,6 +1,6 @@
 #include "include/types.h"
 #include "include/stat.h"
-#include "user.h"
+#include "xv6-user/user.h"
 
 int
 main(int argc, char *argv[])

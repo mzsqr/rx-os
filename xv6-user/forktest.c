@@ -3,7 +3,7 @@
 
 #include "include/types.h"
 #include "include/stat.h"
-#include "user.h"
+#include "xv6-user/user.h"
 
 #define N  1000
 

@@ -24,6 +24,7 @@ pub mod superblock;
 
 pub unsafe fn init(dev: u32) {
     unsafe {
+        // println!("Init File System.");
         SuperBlock::init(dev);
         Log::init(dev);
         println!("file system: setup done");

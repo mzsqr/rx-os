@@ -1,8 +1,8 @@
 use core::{cell::UnsafeCell, ptr::null_mut};
 
 use crate::{
-    arch::riscv::qemu::fs::NFILE,
-    fs::{inode::Inode, pipe::VFile},
+    arch::riscv::qemu::{fs::NFILE, layout::STACK_SIZE},
+    fs::{file::VFile, inode::Inode},
     lock::{Mutex, MutexGuard},
 };
 use alloc::{boxed::Box, sync::Arc};
@@ -95,7 +95,7 @@ impl ProcData {
     }
 
     pub fn set_name(&mut self, name: &[u8]) {
-        let end = self.name.len().max(name.len());
+        let end = self.name.len().min(name.len());
         self.name[..end].copy_from_slice(&name[..end]);
     }
 
@@ -137,7 +137,7 @@ impl ProcData {
     /// 要提前分配Trapframe
     pub unsafe fn proc_pagetable(&mut self) -> Option<Box<PageTable>> {
         unsafe extern "C" {
-            fn trapoline();
+            fn trampoline();
         }
 
         let mut pgt = PageTable::unew();
@@ -145,7 +145,7 @@ impl ProcData {
         if !unsafe {
             pgt.map(
                 VirtualAddress::new(TRAMPOLINE),
-                PhysicalAddress::new(trapoline as usize),
+                PhysicalAddress::new(trampoline as usize),
                 0,
                 PteFlags::R | PteFlags::X,
             )
@@ -176,8 +176,8 @@ impl ProcData {
 
         let tf = unsafe { &mut *self.trapframe };
 
-        tf.kernel_satp = unsafe { satp::read() }; // TODO: stack size
-        tf.kernel_sp = self.kstack + PGSIZE * 4;
+        tf.kernel_satp = unsafe { satp::read() };
+        tf.kernel_sp = self.kstack + STACK_SIZE;
         tf.kernel_trap = user_trap as usize;
         tf.kernel_hartid = unsafe { cpuid() };
     }
@@ -212,6 +212,7 @@ impl Process {
 
     pub fn init(&self, kstack: usize) {
         let pdata = unsafe { self.data.as_mut_unchecked() };
+        pdata.open_files = array![_ => None; NFILE];
         pdata.kstack = kstack;
     }
 
@@ -307,7 +308,7 @@ impl Process {
         }
     }
 
-    pub fn sleep<T: ?Sized>(&self, chan: usize, lock: MutexGuard<'_, T>) {
+    pub fn sleep<T>(&self, chan: usize, lock: MutexGuard<'_, T>) {
         let mut g = self.meta.lock();
         drop(lock);
 
@@ -318,6 +319,7 @@ impl Process {
             let ctx = self.data.as_mut_unchecked().get_context_mut();
             g = c.sched(g, ctx);
             g.chan = 0;
+            drop(g);
         }
     }
 
