@@ -4,6 +4,7 @@ use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicBool, Ordering, fence};
 
 use crate::process::cpu::{cpuid, pop_off, push_off};
+use crate::{STARTED, println};
 
 #[derive(Debug, Default)]
 pub struct Mutex<T: ?Sized> {
@@ -51,7 +52,25 @@ impl<T> Mutex<T> {
             self.cpu_id.set(cpuid() as isize);
         }
 
-        MutexGuard { spinlock: &self }
+        MutexGuard { spinlock: self }
+    }
+
+    pub fn try_lock(&self) -> Option<MutexGuard<'_, T>> {
+        push_off();
+        if !self.holding() && !self.locked.swap(true, Ordering::Acquire) {
+            fence(Ordering::SeqCst);
+            unsafe {
+                self.cpu_id.set(cpuid() as isize);
+            }
+            Some(MutexGuard { spinlock: self })
+        } else {
+            pop_off();
+            None
+        }
+    }
+
+    pub fn force_unlock(&self) {
+        self.release();
     }
 
     pub fn release(&self) {

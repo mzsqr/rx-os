@@ -28,7 +28,7 @@ unsafe fn fork_ret() {
     // 父进程执行过程中透过调度器必然会持有meta锁，所以这里要强制解锁
     // 这和父进程是没有关联的
     unsafe {
-        CPUManager::myproc().unwrap().meta.release();
+        CPUManager::myproc().unwrap().meta.force_unlock();
 
         if FIRST {
             fs::init(ROOTDEV);

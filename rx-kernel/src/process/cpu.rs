@@ -144,22 +144,22 @@ impl CPUManager {
                 // if unsafe { cpuid() } == 0 {
                 //     println!("scheduler {}", unsafe { p.data.as_ref_unchecked().id });
                 // }
-                let mut g = p.meta.lock();
-                // if let Some(mut g) = p.meta.try_lock() {
-                // println!("check {}", unsafe { p.data.as_ref_unchecked().id });
-                if let ProcState::Runnable = g.state {
-                    c.set_proc(Some(p));
-                    g.state = ProcState::Running;
-                    unsafe {
-                        switch(
-                            c.get_context_mut(),
-                            &mut p.data.as_mut_unchecked().context as *mut _,
-                        );
+                // let mut g = p.meta.lock();
+                if let Some(mut g) = p.meta.try_lock() {
+                    // println!("check {}", unsafe { p.data.as_ref_unchecked().id });
+                    if let ProcState::Runnable = g.state {
+                        c.set_proc(Some(p));
+                        g.state = ProcState::Running;
+                        unsafe {
+                            switch(
+                                c.get_context_mut(),
+                                &mut p.data.as_mut_unchecked().context as *mut _,
+                            );
+                        }
+                        c.set_proc(None);
                     }
-                    c.set_proc(None);
+                    drop(g);
                 }
-                drop(g);
-                // }
             }
         }
     }

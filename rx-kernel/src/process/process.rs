@@ -127,7 +127,7 @@ impl ProcData {
         // write forkret
         // child process will return user space from fork ret
         self.context.write_ra(fork_ret as usize);
-        self.context.write_sp(kstack + PGSIZE);
+        self.context.write_sp(kstack + STACK_SIZE);
     }
 
     /// 为给定进程分配一个页表

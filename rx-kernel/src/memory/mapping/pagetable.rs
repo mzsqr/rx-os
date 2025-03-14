@@ -30,7 +30,7 @@ use alloc::boxed::Box;
 
 use crate::{
     STACK0,
-    arch::riscv::qemu::layout::{MAXVA, PGSHIFT, PGSIZE, TRAMPOLINE, TRAPFRAME},
+    arch::riscv::qemu::layout::{MAXVA, PGSHIFT, PGSIZE, STACK_SIZE, TRAMPOLINE, TRAPFRAME},
     memory::{
         PageAllocator, RawPage,
         address::{Addr, PhysicalAddress, VirtualAddress},

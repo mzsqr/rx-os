@@ -6,7 +6,7 @@ use core::{
     sync::atomic::{AtomicBool, Ordering, fence},
 };
 
-use crate::process::cpu::{self, push_off};
+use crate::process::cpu::{self, pop_off, push_off};
 
 pub struct Mutex<T: ?Sized> {
     lock: AtomicBool,
@@ -53,7 +53,7 @@ impl<T: ?Sized> Mutex<T> {
                 break guard;
             }
 
-            while self.is_locked() {
+            while self.holding() {
                 core::hint::spin_loop();
             }
         }
@@ -82,9 +82,29 @@ impl<T: ?Sized> Mutex<T> {
 
     #[inline(always)]
     pub fn try_lock(&self) -> Option<MutexGuard<T>> {
+        push_off();
         if self
             .lock
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+        {
+            fence(Ordering::SeqCst);
+            self.cpu_id.set(unsafe { cpu::cpuid() as isize });
+            Some(MutexGuard {
+                lock: self,
+                data: unsafe { &mut *self.data.get() },
+            })
+        } else {
+            pop_off();
+            None
+        }
+    }
+
+    #[inline(always)]
+    pub fn try_lock_weak(&self) -> Option<MutexGuard<T>> {
+        if self
+            .lock
+            .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
         {
             fence(Ordering::SeqCst);
@@ -99,20 +119,8 @@ impl<T: ?Sized> Mutex<T> {
     }
 
     #[inline(always)]
-    pub fn try_lock_weak(&self) -> Option<MutexGuard<T>> {
-        if self
-            .lock
-            .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
-            .is_ok()
-        {
-            self.cpu_id.set(unsafe { cpu::cpuid() as isize });
-            Some(MutexGuard {
-                lock: self,
-                data: unsafe { &mut *self.data.get() },
-            })
-        } else {
-            None
-        }
+    pub unsafe fn raw_data_mut_unchecked(&self) -> *mut T {
+        unsafe { self.data.as_mut_unchecked() }
     }
 
     #[inline(always)]
