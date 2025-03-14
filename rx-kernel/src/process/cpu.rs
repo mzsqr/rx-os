@@ -140,26 +140,40 @@ impl CPUManager {
             unsafe { sstatus::intr_on() };
 
             // use seek runnable is not fair
-            for p in &PROC_MANAGER.proc {
-                // if unsafe { cpuid() } == 0 {
-                //     println!("scheduler {}", unsafe { p.data.as_ref_unchecked().id });
-                // }
-                // let mut g = p.meta.lock();
-                if let Some(mut g) = p.meta.try_lock() {
-                    // println!("check {}", unsafe { p.data.as_ref_unchecked().id });
-                    if let ProcState::Runnable = g.state {
-                        c.set_proc(Some(p));
-                        g.state = ProcState::Running;
-                        unsafe {
-                            switch(
-                                c.get_context_mut(),
-                                &mut p.data.as_mut_unchecked().context as *mut _,
-                            );
-                        }
-                        c.set_proc(None);
-                    }
-                    drop(g);
-                }
+            // for p in &PROC_MANAGER.proc {
+            //     // if unsafe { cpuid() } == 0 {
+            //     //     println!("scheduler {}", unsafe { p.data.as_ref_unchecked().id });
+            //     // }
+            //     // let mut g = p.meta.lock();
+            //     if let Some(mut g) = p.meta.try_lock() {
+            //         // println!("check {}", unsafe { p.data.as_ref_unchecked().id });
+            //         if let ProcState::Runnable = g.state {
+            //             c.set_proc(Some(p));
+            //             g.state = ProcState::Running;
+            //             unsafe {
+            //                 switch(
+            //                     c.get_context_mut(),
+            //                     &mut p.data.as_mut_unchecked().context as *mut _,
+            //                 );
+            //             }
+            //             c.set_proc(None);
+            //         }
+            //         drop(g);
+            //     }
+            // }
+
+            if let Some(p) = PROC_MANAGER.seek_runnable() {
+                c.set_proc(Some(p));
+                let mut pmeta = p.meta.lock();
+                pmeta.state = ProcState::Running;
+                unsafe {
+                    switch(
+                        c.get_context_mut(),
+                        p.data.as_mut_unchecked().get_context_mut(),
+                    )
+                };
+                c.set_proc(None);
+                drop(pmeta);
             }
         }
     }

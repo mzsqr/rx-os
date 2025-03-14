@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     devices::DEVICE_LIST,
-    inode::{ICACHE, Inode, InodeCache},
+    inode::Inode,
     log::Log,
     stat::Stat,
 };
@@ -80,6 +80,7 @@ impl VFile {
                 let mut ig = inode.lock();
                 let total = ig.read(true, addr, self.offset.get(), len as u32)?;
                 self.offset.set(self.offset.get() + total as u32);
+                drop(ig);
                 Ok(total)
             }
             FileType::Device => {

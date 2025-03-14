@@ -11,7 +11,7 @@ use alloc::boxed::Box;
 
 use crate::{
     arch::riscv::qemu::layout::{PGSIZE, STACK_SIZE},
-    process::{cpu::CPUManager, manager::PROC_MANAGER},
+    process::cpu::CPUManager,
 };
 
 pub mod address;

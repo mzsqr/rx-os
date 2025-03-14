@@ -4,7 +4,6 @@ use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicBool, Ordering, fence};
 
 use crate::process::cpu::{cpuid, pop_off, push_off};
-use crate::{STARTED, println};
 
 #[derive(Debug, Default)]
 pub struct Mutex<T: ?Sized> {

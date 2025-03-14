@@ -59,7 +59,7 @@ impl Disk {
 
     /// Init the Disk.
     /// Only called once when the kernel boots.
-    pub unsafe fn init(&mut self) {
+    pub unsafe fn init(&mut self) { unsafe {
         debug_assert_eq!((&self.desc as *const _ as usize) % PGSIZE, 0);
         debug_assert_eq!((&self.used as *const _ as usize) % PGSIZE, 0);
         debug_assert_eq!((&self.free as *const _ as usize) % PGSIZE, 0);
@@ -118,7 +118,7 @@ impl Disk {
 
         // set the descriptors free
         self.free.iter_mut().for_each(|f| *f = true);
-    }
+    }}
 
     /// Allocate three descriptors.
     fn alloc3_desc(&mut self, idx: &mut [usize; 3]) -> bool {

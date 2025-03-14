@@ -13,10 +13,7 @@ use crate::lock::Mutex;
 use crate::process::context::Context;
 use crate::process::cpu::CPUManager;
 use crate::{
-    arch::riscv::qemu::{
-        layout::{PGSIZE, TRAMPOLINE},
-        param::NPROC,
-    },
+    arch::riscv::qemu::{layout::PGSIZE, param::NPROC},
     memory::{
         PageAllocator, RawPage, Stack,
         address::{PhysicalAddress, VirtualAddress},
@@ -91,6 +88,24 @@ impl ProcManager {
         }
     }
 
+    /// Find a runnable and set status to allocated
+    pub fn seek_runnable(&self) -> Option<&Process> {
+        for p in self.proc.iter() {
+            let mut guard = p.meta.lock();
+            match guard.state {
+                ProcState::Runnable => {
+                    guard.state = ProcState::Allocated;
+                    drop(guard);
+                    return Some(p);
+                }
+                _ => {
+                    drop(guard);
+                }
+            }
+        }
+        None
+    }
+
     pub unsafe fn user_init(&self) {
         println!("first user process init......");
 
@@ -152,17 +167,6 @@ impl ProcManager {
             }
             drop(g);
         }
-    }
-
-    pub fn seek_runnable(&self) -> Option<&Process> {
-        for p in self.proc.iter() {
-            let mut g = p.meta.lock();
-            if let ProcState::Runnable = g.state {
-                g.state = ProcState::Allocated;
-                return Some(p);
-            }
-        }
-        None
     }
 
     /// 要提前持有wait锁

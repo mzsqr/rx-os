@@ -1,7 +1,7 @@
 //! 分发设备读写函数
 //! 要求设备自己实现同步和互斥
 
-use core::{cell::UnsafeCell, mem::transmute, ptr::NonNull};
+use core::cell::UnsafeCell;
 
 use crate::arch::riscv::qemu::param::NDEV;
 

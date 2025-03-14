@@ -56,6 +56,7 @@ impl InodeCache {
                 idata.valid = false;
                 drop(idata);
                 imeta.refs -= 1;
+                drop(g);
             } else {
                 drop(g);
                 idata.dinode.itype = InodeType::Empty;
@@ -65,9 +66,11 @@ impl InodeCache {
 
                 let mut g = self.meta.lock();
                 g[i].refs -= 1;
+                drop(g);
             }
         } else {
             imeta.refs -= 1;
+            drop(g);
         }
     }
 

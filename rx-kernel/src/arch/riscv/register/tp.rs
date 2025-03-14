@@ -1,13 +1,13 @@
 // read and write tp, the thread pointer, which holds
 // this core's hartid (core number), the index into cpus[].
 #[inline]
-pub unsafe fn read() -> usize {
+pub unsafe fn read() -> usize { unsafe {
     let ret:usize;
     core::arch::asm!("mv {}, tp",out(reg)ret);
     ret
-}
+}}
 
 #[inline]
-pub unsafe fn write(x:usize){
+pub unsafe fn write(x:usize){ unsafe {
     core::arch::asm!("mv tp, {}", in(reg)x);
-}
+}}

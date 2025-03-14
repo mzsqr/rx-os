@@ -1,9 +1,8 @@
-use core::sync::atomic::Ordering;
 
 use crate::{
     process::{
         cpu::CPUManager,
-        manager::{PROC_MANAGER, ProcManager},
+        manager::PROC_MANAGER,
     },
     trap::TICKS,
 };

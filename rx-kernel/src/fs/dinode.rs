@@ -4,7 +4,7 @@ use core::ptr;
 
 use crate::{
     arch::riscv::qemu::fs::{DIRSIZ, IPB, NDIRECT},
-    fs::{bio::BCache, dinode, log::Log, superblock::SuperBlock},
+    fs::{bio::BCache, log::Log, superblock::SuperBlock},
 };
 
 use super::bio::Buf;

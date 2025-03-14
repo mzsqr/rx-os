@@ -13,46 +13,46 @@ pub enum SSTATUS {
 }
 
 #[inline]
-pub unsafe fn read() -> usize {
+pub unsafe fn read() -> usize { unsafe {
     let sstatus: usize;
     core::arch::asm!("csrr {}, sstatus", out(reg)sstatus);
     sstatus
-}
+}}
 
 #[inline]
-pub unsafe fn write(sstatus: usize) {
+pub unsafe fn write(sstatus: usize) { unsafe {
     core::arch::asm!("csrw sstatus, {}", in(reg)sstatus);
-}
+}}
 
 #[inline]
-pub unsafe fn is_from_supervisor() -> bool {
+pub unsafe fn is_from_supervisor() -> bool { unsafe {
     (read() & SSTATUS::SPP as usize) != 0
-}
+}}
 
 #[inline]
-pub unsafe fn is_from_user() -> bool {
+pub unsafe fn is_from_user() -> bool { unsafe {
     (read() & SSTATUS::SPP as usize) == 0
-}
+}}
 
 /// enable device interrupts
 #[inline]
-pub unsafe fn intr_on() {
+pub unsafe fn intr_on() { unsafe {
     write(read() | SSTATUS::SIE as usize);
-}
+}}
 
 /// disable device interrupts
 #[inline]
-pub unsafe fn intr_off() {
+pub unsafe fn intr_off() { unsafe {
     write(read() & !(SSTATUS::SIE as usize));
-}
+}}
 
 
 /// are device interrupts enabled?
 #[inline]
-pub unsafe fn intr_get() -> bool {
+pub unsafe fn intr_get() -> bool { unsafe {
     let x = read();
     return (x & SSTATUS::SIE as usize) != 0;
-}
+}}
 
 /// clear SPP to 0
 #[inline]

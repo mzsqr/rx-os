@@ -98,8 +98,8 @@ fn load_seg(
 
 // TODO: modify argv to contain str
 pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str> {
-    let mut elf = ElfHeader::default();
-    let mut ph = ProgHeader::default();
+    let elf = ElfHeader::default();
+    let ph = ProgHeader::default();
 
     Log::begin_op();
     let inode = ICACHE

@@ -1,7 +1,7 @@
 use core::{fmt, panic::PanicInfo};
 
 use crate::{
-    driver::{self, uart::UART},
+    driver::{uart::UART},
     shutdown::shutdown,
 };
 

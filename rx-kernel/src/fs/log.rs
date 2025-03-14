@@ -1,5 +1,5 @@
 use core::{
-    ops::{Deref, DerefMut},
+    ops::Deref,
     ptr,
 };
 
@@ -10,7 +10,7 @@ use crate::{
     println,
     process::{
         cpu::CPUManager,
-        manager::{PROC_MANAGER, ProcManager},
+        manager::PROC_MANAGER,
     },
 };
 
@@ -128,7 +128,7 @@ impl Log {
     fn write_log(&mut self) {
         for i in 1..=self.lh.len {
             let mut log_buf = BCache::read(self.dev, self.start + i);
-            let mut cache_buf = BCache::read(self.dev, self.lh.blocknos[i as usize - 1]);
+            let cache_buf = BCache::read(self.dev, self.lh.blocknos[i as usize - 1]);
 
             unsafe {
                 ptr::copy(cache_buf.raw_data(), log_buf.raw_data_mut(), 1);

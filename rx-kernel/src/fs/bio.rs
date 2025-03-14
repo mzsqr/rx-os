@@ -18,14 +18,13 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+use crate::{lock::Mutex, print, println};
 use array_macro::array;
-use spin::Mutex;
 
 use crate::{
     arch::riscv::qemu::fs::{BSIZE, NBUF},
     driver::virtio_disk::DISK,
     lock::{SleepMutex, SleepMutexGuard},
-    println,
 };
 
 pub struct BCache {
@@ -38,7 +37,7 @@ pub static BCACHE: BCache = BCache::new();
 impl BCache {
     pub const fn new() -> Self {
         Self {
-            ctrl: Mutex::new(BufLru::new()),
+            ctrl: Mutex::new(BufLru::new(), "Buf LRU"),
             bufs: array![_ => BufInner::new(); NBUF],
         }
     }
@@ -49,6 +48,7 @@ impl BCache {
         let mut ctrl = BCACHE.ctrl.lock();
 
         if let Some((idx, rc)) = ctrl.find_cached(dev, blockno) {
+            drop(ctrl);
             Buf {
                 index: idx,
                 dev,
@@ -57,6 +57,8 @@ impl BCache {
                 data: Some(BCACHE.bufs[idx].data.lock()),
             }
         } else if let Some((idx, rc)) = ctrl.recycle(dev, blockno) {
+            BCACHE.bufs[idx].valid.store(false, Ordering::Relaxed);
+            drop(ctrl);
             Buf {
                 index: idx,
                 dev,
@@ -172,22 +174,22 @@ impl BufLru {
     /// 寻找一个指定的块
     /// 存在则返回数据所在索引以及引用计数
     fn find_cached(&mut self, dev: u32, blockno: u32) -> Option<(usize, *mut usize)> {
-        let mut b = self.head as usize;
+        let mut b = self.head;
         loop {
             let bref = &mut self.inner[b];
             if bref.dev == dev && bref.blockno == blockno {
                 bref.refcnt += 1;
                 return Some((bref.index, &mut bref.refcnt));
             }
-            b = bref.next as usize;
-            if b == self.head as usize {
+            b = bref.next;
+            if b == self.head {
                 return None;
             }
         }
     }
 
     fn recycle(&mut self, dev: u32, blockno: u32) -> Option<(usize, *mut usize)> {
-        let mut b = self.tail as usize;
+        let mut b = self.tail;
         loop {
             let bref = &mut self.inner[b];
             if bref.refcnt == 0 {
@@ -196,8 +198,8 @@ impl BufLru {
                 bref.blockno = blockno;
                 return Some((bref.index, &mut bref.refcnt));
             }
-            b = bref.prev as usize;
-            if b == self.tail as usize {
+            b = bref.prev;
+            if b == self.tail {
                 return None;
             }
         }
@@ -219,6 +221,8 @@ impl BufLru {
 
             self.inner[index].prev = self.tail;
             self.inner[index].next = self.head;
+            self.inner[self.head].prev = index;
+            self.inner[self.tail].next = index;
             self.head = index;
         }
     }

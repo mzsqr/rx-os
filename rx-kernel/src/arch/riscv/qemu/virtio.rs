@@ -60,13 +60,13 @@ pub const VIRTIO_BLK_T_OUT: u32 = 1; // write the disk
 pub const NUM: usize = 8;
 
 #[inline]
-pub unsafe fn read(offset: usize) -> u32 {
+pub unsafe fn read(offset: usize) -> u32 { unsafe {
     let src = (Into::<usize>::into(VIRTIO0) + offset) as *const u32;
     ptr::read_volatile(src)
-}
+}}
 
 #[inline]
-pub unsafe fn write(offset: usize, data: u32) {
+pub unsafe fn write(offset: usize, data: u32) { unsafe {
     let dst = (Into::<usize>::into(VIRTIO0) + offset) as *mut u32;
     ptr::write_volatile(dst, data);
-}
+}}

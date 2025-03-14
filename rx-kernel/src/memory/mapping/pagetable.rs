@@ -29,8 +29,7 @@ use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 use alloc::boxed::Box;
 
 use crate::{
-    STACK0,
-    arch::riscv::qemu::layout::{MAXVA, PGSHIFT, PGSIZE, STACK_SIZE, TRAMPOLINE, TRAPFRAME},
+    arch::riscv::qemu::layout::{MAXVA, PGSHIFT, PGSIZE, TRAMPOLINE, TRAPFRAME},
     memory::{
         PageAllocator, RawPage,
         address::{Addr, PhysicalAddress, VirtualAddress},
@@ -483,7 +482,7 @@ impl PageTable {
 
     /// 处理src内容读取过程中可能为0的情况
     /// 最多读取dst能存的最大值（dst.len())
-    pub fn copy_in_str(&mut self, mut dst: &mut [u8], mut src: usize) -> Result<(), &'static str> {
+    pub fn copy_in_str(&mut self, mut dst: &mut [u8], src: usize) -> Result<(), &'static str> {
         let mut va = VirtualAddress::new(src);
         va.pg_round_down();
 

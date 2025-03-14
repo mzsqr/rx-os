@@ -1,6 +1,6 @@
 use core::{
     cell::Cell,
-    ptr::{null, null_mut, slice_from_raw_parts_mut},
+    ptr::{null_mut, slice_from_raw_parts_mut},
 };
 
 use alloc::boxed::Box;
@@ -15,13 +15,13 @@ use crate::{
     },
     fs::{
         dinode::InodeType,
-        file::{File, FileType, VFile},
-        inode::{self, ICACHE},
-        log::{LOG, Log},
+        file::{FileType, VFile},
+        inode::ICACHE,
+        log::Log,
     },
     memory::{PageAllocator, RawPage},
     println,
-    process::{cpu::CPUManager, elf::exec, manager::ProcManager},
+    process::elf::exec,
 };
 
 use super::{SysResult, Syscall};
@@ -214,7 +214,7 @@ impl Syscall<'_> {
             }
         }
         Log::end_op();
-        return Err(());
+        Err(())
     }
 
     // TODO: pipe
@@ -224,7 +224,7 @@ impl Syscall<'_> {
         Log::begin_op();
         let addr = self.arg(0);
         self.copy_from_str(addr, &mut path).map_err(|_| ())?;
-        if let Ok(_) = ICACHE.create(&path, InodeType::Directory, 0, 0) {
+        if ICACHE.create(&path, InodeType::Directory, 0, 0).is_ok() {
             Log::end_op();
             Ok(0)
         } else {

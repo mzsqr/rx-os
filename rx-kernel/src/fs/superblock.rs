@@ -3,9 +3,8 @@
 //!
 
 use core::{
-    cell::{LazyCell, UnsafeCell},
-    mem::MaybeUninit,
-    ptr::{self, copy_nonoverlapping},
+    cell::UnsafeCell,
+    ptr::{self},
     sync::atomic::{AtomicBool, Ordering},
 };
 
