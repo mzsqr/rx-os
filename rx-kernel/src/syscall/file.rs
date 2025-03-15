@@ -1,6 +1,7 @@
 use core::{
     cell::Cell,
     ptr::{null_mut, slice_from_raw_parts_mut},
+    str::from_utf8,
 };
 
 use alloc::boxed::Box;
@@ -120,11 +121,21 @@ impl Syscall<'_> {
     }
 
     pub fn sys_exec(&self) -> SysResult {
+        // unsafe {
+        //     self.process
+        //         .data
+        //         .as_ref_unchecked()
+        //         .pagetable
+        //         .as_deref()
+        //         .unwrap()
+        //         .debug(3, 0)
+        // };
+
         let mut path = [0_u8; MAXPATH];
         let mut argv = [null_mut::<u8>(); MAXARG];
         let path_addr = self.arg(0);
         self.copy_from_str(path_addr, &mut path).map_err(|_| ())?;
-        let argv_addr = self.arg(0);
+        let argv_addr = self.arg(1);
 
         let mut count = 0;
         loop {
@@ -140,7 +151,8 @@ impl Syscall<'_> {
                 return Err(());
             }
             let mut buf = [0u8; 8];
-            self.copy_from_addr(argv_addr, &mut buf).map_err(|_| ())?;
+            self.copy_from_addr(argv_addr + size_of::<usize>(), &mut buf)
+                .map_err(|_| ())?;
             let user_arg = usize::from_le_bytes(buf);
             if user_arg == 0 {
                 argv[count] = null_mut();
@@ -162,7 +174,6 @@ impl Syscall<'_> {
                 let _ = unsafe { Box::from_raw(i as *mut RawPage) };
             }
         }
-
         Ok(ret)
     }
 
@@ -174,8 +185,8 @@ impl Syscall<'_> {
         let addr = self.arg(0);
         self.copy_from_str(addr, &mut path).map_err(|_| ())?;
         if let Ok(inode) = ICACHE.create(&path, InodeType::Device, major as i16, minor as i16) {
-            drop(inode);
             Log::end_op();
+            drop(inode);
             Ok(0)
         } else {
             Log::end_op();

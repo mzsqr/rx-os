@@ -81,8 +81,12 @@ impl CPU {
 
     pub fn try_yield_proc(&mut self) {
         if let Some(p) = self.process {
-            if let ProcState::Running = p.meta.lock().state {
+            let g = p.meta.lock();
+            if let ProcState::Running = g.state {
+                drop(g);
                 p.yielding();
+            } else {
+                drop(g);
             }
         }
     }
@@ -126,7 +130,10 @@ impl CPUManager {
         if let Some(my_proc) = unsafe { Self::myproc() } {
             let st = my_proc.meta.lock().state;
             if let ProcState::Running = st {
+                drop(st);
                 my_proc.yielding();
+            } else {
+                drop(st);
             }
         }
     }

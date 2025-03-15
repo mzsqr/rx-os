@@ -19,6 +19,7 @@ use crate::arch::riscv::qemu::layout::{PGSHIFT, PGSIZE};
 use crate::arch::riscv::qemu::virtio::*;
 use crate::fs::bio::Buf;
 use crate::lock::Mutex;
+use crate::println;
 use crate::process::cpu::CPUManager;
 use crate::process::manager::PROC_MANAGER;
 
@@ -59,66 +60,68 @@ impl Disk {
 
     /// Init the Disk.
     /// Only called once when the kernel boots.
-    pub unsafe fn init(&mut self) { unsafe {
-        debug_assert_eq!((&self.desc as *const _ as usize) % PGSIZE, 0);
-        debug_assert_eq!((&self.used as *const _ as usize) % PGSIZE, 0);
-        debug_assert_eq!((&self.free as *const _ as usize) % PGSIZE, 0);
+    pub unsafe fn init(&mut self) {
+        unsafe {
+            debug_assert_eq!((&self.desc as *const _ as usize) % PGSIZE, 0);
+            debug_assert_eq!((&self.used as *const _ as usize) % PGSIZE, 0);
+            debug_assert_eq!((&self.free as *const _ as usize) % PGSIZE, 0);
 
-        if read(VIRTIO_MMIO_MAGIC_VALUE) != 0x74726976
-            || read(VIRTIO_MMIO_VERSION) != 1
-            || read(VIRTIO_MMIO_DEVICE_ID) != 2
-            || read(VIRTIO_MMIO_VENDOR_ID) != 0x554d4551
-        {
-            panic!("could not find virtio disk");
+            if read(VIRTIO_MMIO_MAGIC_VALUE) != 0x74726976
+                || read(VIRTIO_MMIO_VERSION) != 1
+                || read(VIRTIO_MMIO_DEVICE_ID) != 2
+                || read(VIRTIO_MMIO_VENDOR_ID) != 0x554d4551
+            {
+                panic!("could not find virtio disk");
+            }
+
+            // step 1,2,3 - reset and set these two status bit
+            let mut status: u32 = 0;
+            status |= VIRTIO_CONFIG_S_ACKNOWLEDGE;
+            write(VIRTIO_MMIO_STATUS, status);
+            status |= VIRTIO_CONFIG_S_DRIVER;
+            write(VIRTIO_MMIO_STATUS, status);
+
+            // step 4 - read feature bits and negotiate
+            let mut features: u32 = read(VIRTIO_MMIO_DEVICE_FEATURES);
+            features &= !(1u32 << VIRTIO_BLK_F_RO);
+            features &= !(1u32 << VIRTIO_BLK_F_SCSI);
+            features &= !(1u32 << VIRTIO_BLK_F_CONFIG_WCE);
+            features &= !(1u32 << VIRTIO_BLK_F_MQ);
+            features &= !(1u32 << VIRTIO_F_ANY_LAYOUT);
+            features &= !(1u32 << VIRTIO_RING_F_EVENT_IDX);
+            features &= !(1u32 << VIRTIO_RING_F_INDIRECT_DESC);
+            write(VIRTIO_MMIO_DRIVER_FEATURES, features);
+
+            // step 5
+            // set FEATURES_OK bit to tell the device feature negotiation is complete
+            status |= VIRTIO_CONFIG_S_FEATURES_OK;
+            write(VIRTIO_MMIO_STATUS, status);
+
+            // step 8
+            // set DRIVER_OK bit to tell device that driver is ready
+            // at this point device is "live"
+            status |= VIRTIO_CONFIG_S_DRIVER_OK;
+            write(VIRTIO_MMIO_STATUS, status);
+
+            write(VIRTIO_MMIO_GUEST_PAGE_SIZE, PGSIZE as u32);
+
+            // initialize queue 0
+            write(VIRTIO_MMIO_QUEUE_SEL, 0);
+            let max = read(VIRTIO_MMIO_QUEUE_NUM_MAX);
+            if max == 0 {
+                panic!("virtio disk has no queue 0");
+            }
+            if max < NUM as u32 {
+                panic!("virtio disk max queue short than NUM={}", NUM);
+            }
+            write(VIRTIO_MMIO_QUEUE_NUM, NUM as u32);
+            let pfn: usize = (self as *const Disk as usize) >> PGSHIFT;
+            write(VIRTIO_MMIO_QUEUE_PFN, u32::try_from(pfn).unwrap());
+
+            // set the descriptors free
+            self.free.iter_mut().for_each(|f| *f = true);
         }
-
-        // step 1,2,3 - reset and set these two status bit
-        let mut status: u32 = 0;
-        status |= VIRTIO_CONFIG_S_ACKNOWLEDGE;
-        write(VIRTIO_MMIO_STATUS, status);
-        status |= VIRTIO_CONFIG_S_DRIVER;
-        write(VIRTIO_MMIO_STATUS, status);
-
-        // step 4 - read feature bits and negotiate
-        let mut features: u32 = read(VIRTIO_MMIO_DEVICE_FEATURES);
-        features &= !(1u32 << VIRTIO_BLK_F_RO);
-        features &= !(1u32 << VIRTIO_BLK_F_SCSI);
-        features &= !(1u32 << VIRTIO_BLK_F_CONFIG_WCE);
-        features &= !(1u32 << VIRTIO_BLK_F_MQ);
-        features &= !(1u32 << VIRTIO_F_ANY_LAYOUT);
-        features &= !(1u32 << VIRTIO_RING_F_EVENT_IDX);
-        features &= !(1u32 << VIRTIO_RING_F_INDIRECT_DESC);
-        write(VIRTIO_MMIO_DRIVER_FEATURES, features);
-
-        // step 5
-        // set FEATURES_OK bit to tell the device feature negotiation is complete
-        status |= VIRTIO_CONFIG_S_FEATURES_OK;
-        write(VIRTIO_MMIO_STATUS, status);
-
-        // step 8
-        // set DRIVER_OK bit to tell device that driver is ready
-        // at this point device is "live"
-        status |= VIRTIO_CONFIG_S_DRIVER_OK;
-        write(VIRTIO_MMIO_STATUS, status);
-
-        write(VIRTIO_MMIO_GUEST_PAGE_SIZE, PGSIZE as u32);
-
-        // initialize queue 0
-        write(VIRTIO_MMIO_QUEUE_SEL, 0);
-        let max = read(VIRTIO_MMIO_QUEUE_NUM_MAX);
-        if max == 0 {
-            panic!("virtio disk has no queue 0");
-        }
-        if max < NUM as u32 {
-            panic!("virtio disk max queue short than NUM={}", NUM);
-        }
-        write(VIRTIO_MMIO_QUEUE_NUM, NUM as u32);
-        let pfn: usize = (self as *const Disk as usize) >> PGSHIFT;
-        write(VIRTIO_MMIO_QUEUE_PFN, u32::try_from(pfn).unwrap());
-
-        // set the descriptors free
-        self.free.iter_mut().for_each(|f| *f = true);
-    }}
+    }
 
     /// Allocate three descriptors.
     fn alloc3_desc(&mut self, idx: &mut [usize; 3]) -> bool {

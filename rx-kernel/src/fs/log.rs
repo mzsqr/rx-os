@@ -1,6 +1,6 @@
 use core::{
-    ops::Deref,
-    ptr,
+    ops::{Deref, DerefMut},
+    ptr::{self, null_mut},
 };
 
 use crate::{
@@ -8,10 +8,7 @@ use crate::{
     fs::{bio::BufData, superblock::SuperBlock},
     lock::Mutex,
     println,
-    process::{
-        cpu::CPUManager,
-        manager::PROC_MANAGER,
-    },
+    process::{cpu::CPUManager, manager::PROC_MANAGER},
 };
 
 use super::bio::{BCache, Buf};
@@ -108,6 +105,21 @@ impl Log {
                     disk_buf.unpin();
                 }
             }
+            drop(log_buf);
+            drop(disk_buf);
+        }
+    }
+
+    pub unsafe fn commit_no_lock(&mut self) {
+        if !self.commiting {
+            panic!("log: committing while the committing flag is not set");
+        }
+        // debug_assert!(self.lh.len > 0);     // it should have some log to commit
+        if self.lh.len > 0 {
+            self.write_log();
+            self.write_head();
+            self.install_trans(false);
+            self.empty_head();
         }
     }
 
@@ -134,6 +146,8 @@ impl Log {
                 ptr::copy(cache_buf.raw_data(), log_buf.raw_data_mut(), 1);
             }
             log_buf.write();
+            drop(cache_buf);
+            drop(log_buf);
         }
     }
 
@@ -152,6 +166,7 @@ impl Log {
                 g = LOG.lock();
             } else {
                 g.outstanding += 1;
+                drop(g);
                 break;
             }
         }
@@ -169,6 +184,8 @@ impl Log {
 
         for i in 0..g.lh.len {
             if g.lh.blocknos[i as usize] == buf.read_blockno() {
+                drop(g);
+                drop(buf);
                 return;
             }
         }
@@ -185,6 +202,8 @@ impl Log {
         let len = g.lh.len as usize;
         g.lh.blocknos[len] = buf.read_blockno();
         g.lh.len += 1;
+        drop(g);
+        drop(buf);
     }
 
     fn no_space(&self) -> bool {
@@ -192,7 +211,7 @@ impl Log {
     }
 
     pub fn end_op() {
-        let mut committing = false;
+        let mut log_ptr = null_mut();
 
         let mut g = LOG.lock();
         g.outstanding -= 1;
@@ -201,19 +220,22 @@ impl Log {
         }
         if g.outstanding == 0 {
             g.commiting = true;
-            committing = true;
+            log_ptr = g.deref_mut() as *mut Log;
         } else {
             let chan = g.deref() as *const Log as usize;
             PROC_MANAGER.wake_up(chan);
         }
         drop(g);
 
-        if committing {
-            unsafe { Log::commit() };
+        if !log_ptr.is_null() {
+            unsafe {
+                log_ptr.as_mut().unwrap().commit_no_lock();
+            };
             let mut g = LOG.lock();
             g.commiting = false;
             let channel = g.deref() as *const Log as usize;
             PROC_MANAGER.wake_up(channel);
+            drop(g);
         }
     }
 }

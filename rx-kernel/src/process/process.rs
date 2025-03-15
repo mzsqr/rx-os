@@ -146,7 +146,7 @@ impl ProcData {
             pgt.map(
                 VirtualAddress::new(TRAMPOLINE),
                 PhysicalAddress::new(trampoline as usize),
-                0,
+                PGSIZE,
                 PteFlags::R | PteFlags::X,
             )
         } {
@@ -273,6 +273,8 @@ impl Process {
         meta.killed = false;
         meta.xstate = 0;
         meta.set_state(ProcState::Unused);
+
+        drop(meta);
     }
 
     pub fn grow_proc(&self, count: isize) -> Result<(), &'static str> {
@@ -304,8 +306,9 @@ impl Process {
         pmeta.set_state(ProcState::Runnable);
         unsafe {
             let c = CPUManager::mycpu();
-            c.sched(pmeta, self.data.as_mut_unchecked().get_context_mut());
+            pmeta = c.sched(pmeta, self.data.as_mut_unchecked().get_context_mut());
         }
+        drop(pmeta);
     }
 
     pub fn sleep<T>(&self, chan: usize, lock: MutexGuard<'_, T>) {
@@ -331,7 +334,7 @@ impl Process {
     }
 
     pub fn fork(&self) -> Option<&Self> {
-        if let Some(proc) = unsafe { PROC_MANAGER.alloc_proc() } {
+        if let Some(proc) = PROC_MANAGER.alloc_proc() {
             let pdata = unsafe { self.data.as_mut_unchecked() };
             let cdata = unsafe { proc.data.as_mut_unchecked() };
             if let Some((pgt, ch_pgt)) = pdata
@@ -356,9 +359,16 @@ impl Process {
             cdata.open_files.clone_from(&pdata.open_files);
             cdata.cwd.clone_from(&pdata.cwd);
 
-            proc.meta.lock().set_state(ProcState::Runnable);
+            cdata.name = pdata.name;
+            cdata.size = pdata.size;
 
-            PROC_MANAGER.wait_list.lock()[pdata.id] = self as *const Process as usize;
+            let mut child_meta = proc.meta.lock();
+            child_meta.state = ProcState::Runnable;
+            drop(child_meta);
+
+            let mut wg = PROC_MANAGER.wait_list.lock();
+            wg[pdata.id] = self as *const Process as usize;
+            drop(wg);
 
             Some(proc)
         } else {

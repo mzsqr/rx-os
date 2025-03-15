@@ -1,6 +1,9 @@
 use num_enum::FromPrimitive;
 
-use crate::process::{cpu::CPUManager, process::Process};
+use crate::{
+    println,
+    process::{cpu::CPUManager, process::Process},
+};
 
 mod file;
 mod proc;
@@ -118,6 +121,8 @@ impl Syscall<'_> {
     pub fn copy_from_addr(&self, addr: usize, buf: &mut [u8]) -> Result<(), &'static str> {
         let pdata = unsafe { self.process.data.as_mut_unchecked() };
         if addr > pdata.size || addr + size_of::<usize>() > pdata.size {
+            println!("[Debug] addr: 0x{:x}", addr);
+            println!("[Debug] pdata size: 0x{:x}", pdata.size);
             panic!("Invalid  user virtual address");
         }
 

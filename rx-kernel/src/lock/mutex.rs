@@ -1,9 +1,12 @@
 use core::cell::{Cell, UnsafeCell};
 use core::hint::spin_loop;
 use core::ops::{Deref, DerefMut};
+use core::str::from_utf8;
 use core::sync::atomic::{AtomicBool, Ordering, fence};
 
+use crate::driver::uart::UART;
 use crate::process::cpu::{cpuid, pop_off, push_off};
+use crate::{STARTED, println};
 
 #[derive(Debug, Default)]
 pub struct Mutex<T: ?Sized> {

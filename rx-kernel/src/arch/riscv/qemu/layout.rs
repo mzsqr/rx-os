@@ -66,7 +66,7 @@ pub const PGSIZE: usize = 4096; // bytes per page
 pub const PGSHIFT: usize = 12; // bits of offset within a page
 pub const PGMASKLEN: usize = 9;
 pub const PGMASK: usize = 0x1FF;
-pub const STACK_SIZE: usize = PGSIZE * 4;
+pub const STACK_SIZE: usize = PGSIZE * 16;
 
 /// One beyond the highest possible virtual address.
 /// MAXVA is actually one bit less than the max allowed by

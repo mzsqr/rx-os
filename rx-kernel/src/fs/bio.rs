@@ -146,7 +146,7 @@ impl<'a> Buf<'a> {
 
 impl Drop for Buf<'_> {
     fn drop(&mut self) {
-        self.data.take();
+        drop(self.data.take());
         BCACHE.release(self.index);
     }
 }

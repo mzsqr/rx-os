@@ -1,7 +1,10 @@
 //! 在内存中缓存的Inode表
 //!
 
-use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
+use core::{
+    ptr::{slice_from_raw_parts, slice_from_raw_parts_mut},
+    str::from_utf8,
+};
 
 use array_macro::array;
 
@@ -10,7 +13,7 @@ use crate::{
     lock::{Mutex, SleepMutex, SleepMutexGuard},
     memory::{copy_from_kernel, copy_to_kernel},
     println,
-    process::cpu::CPUManager,
+    process::cpu::{CPUManager, cpuid},
 };
 
 use super::{
@@ -103,6 +106,7 @@ impl InodeCache {
             .enumerate()
             .find(|(_, x)| x.inum == inum && x.refs > 0 && x.dev == dev)
         {
+            g[idx].refs += 1;
             Inode {
                 dev,
                 inum,
@@ -110,6 +114,11 @@ impl InodeCache {
             }
         } else if let Some((index, _)) = g.iter_mut().enumerate().find(|(_, x)| x.refs == 0) {
             // 未在cache中找到inum指向inode信息
+            g[index].dev = dev;
+            g[index].inum = inum;
+            g[index].refs = 1;
+            let idata = self.data[index].lock();
+            assert!(!idata.valid, "Empty cache is valid here");
             Inode { dev, inum, index }
         } else {
             panic!("inode get: not enough cache.");
@@ -239,7 +248,7 @@ fn skip_path(path: &[u8], mut cur: usize, name: &mut [u8; DIRSIZ]) -> usize {
         debug_assert!(false);
         count = name.len() - 1;
     }
-    name[..count].copy_from_slice(&path[start..]);
+    name[..count].copy_from_slice(&path[start..start + count]);
     name[count] = 0;
 
     // skip succeeding b'/'
@@ -397,6 +406,7 @@ impl InodeData {
             let src = unsafe {
                 &(*slice_from_raw_parts(buf.raw_data() as *const u8, BSIZE))[block_offset..]
             };
+            // println!("{:?}", &src[..write_len]);
             // 复制到dst指向的虚拟地址
             copy_from_kernel(dst, src, is_user, write_len)?;
             offset += write_len;

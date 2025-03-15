@@ -3,6 +3,7 @@
 use core::cell::{Cell, UnsafeCell};
 use core::ops::{Deref, DerefMut, Drop};
 
+use crate::println;
 use crate::process::cpu::CPUManager;
 use crate::process::manager::PROC_MANAGER;
 
@@ -49,7 +50,7 @@ impl<T: ?Sized> SleepMutex<T> {
         self.locked.set(true);
         drop(guard);
         SleepMutexGuard {
-            lock: &self,
+            lock: self,
             data: unsafe { &mut *self.data.get() },
         }
     }
@@ -63,9 +64,7 @@ impl<T: ?Sized> SleepMutex<T> {
     }
 
     fn wake_up(&self) {
-        unsafe {
-            PROC_MANAGER.wake_up(self.locked.as_ptr() as usize);
-        }
+        PROC_MANAGER.wake_up(self.locked.as_ptr() as usize);
     }
 }
 

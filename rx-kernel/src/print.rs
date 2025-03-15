@@ -1,9 +1,6 @@
 use core::{fmt, panic::PanicInfo};
 
-use crate::{
-    driver::{uart::UART},
-    shutdown::shutdown,
-};
+use crate::{driver::uart::UART, shutdown::shutdown};
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {

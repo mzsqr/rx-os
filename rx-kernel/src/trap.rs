@@ -273,5 +273,7 @@ pub unsafe fn kernel_trap(
 }
 
 pub unsafe fn clock_intr() {
-    let _ = TICKS.lock().add(1);
+    if unsafe { cpuid() == 0 } {
+        let _ = TICKS.lock().add(1);
+    }
 }

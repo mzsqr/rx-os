@@ -61,7 +61,7 @@ pub fn copy_to_kernel(
         let _ = pgt.copy_in(dst, src);
     } else {
         let src = unsafe { &*slice_from_raw_parts(src as *mut u8, count) };
-        dst.copy_from_slice(src);
+        dst[..count].copy_from_slice(src);
     }
     Ok(())
 }
@@ -79,10 +79,10 @@ pub fn copy_from_kernel(
             .pagetable
             .as_deref_mut()
             .unwrap();
-        pgt.copy_out(dst, src);
+        let _ = pgt.copy_out(dst, src);
     } else {
         let dst = unsafe { &mut *slice_from_raw_parts_mut(dst as *mut u8, count) };
-        dst.copy_from_slice(src);
+        dst.copy_from_slice(&src[..count]);
     }
     Ok(())
 }

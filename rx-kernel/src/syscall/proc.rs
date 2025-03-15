@@ -1,9 +1,6 @@
-
 use crate::{
-    process::{
-        cpu::CPUManager,
-        manager::PROC_MANAGER,
-    },
+    println,
+    process::{cpu::CPUManager, manager::PROC_MANAGER},
     trap::TICKS,
 };
 

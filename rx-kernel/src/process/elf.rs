@@ -11,6 +11,7 @@ use crate::{
         address::{Addr, VirtualAddress},
         mapping::{page_round_up, pagetable::PageTable},
     },
+    println,
 };
 
 use super::cpu::CPUManager;
@@ -99,7 +100,6 @@ fn load_seg(
 // TODO: modify argv to contain str
 pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str> {
     let elf = ElfHeader::default();
-    let ph = ProgHeader::default();
 
     Log::begin_op();
     let inode = ICACHE
@@ -131,6 +131,7 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
     }
 
     let proc = unsafe { CPUManager::myproc().unwrap() };
+    let old_size = unsafe { proc.data.as_ref_unchecked().size };
     // 为进程分配一个新的进程表
     //  旧的页表仍然为进程所有
     // 进程释放页面后take即可销毁
@@ -141,9 +142,11 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
     let ph_size = size_of::<ProgHeader>() as u32;
     let mut off = elf.phoff;
     let mut size = 0;
+    let mut ph = ProgHeader::default();
+
     for _ in 0..elf.phnum {
         if ig
-            .read(false, &ph as *const _ as usize, off as u32, ph_size)
+            .read(false, &mut ph as *mut _ as usize, off as u32, ph_size)
             .is_err()
         {
             // page table is freed automatic
@@ -151,9 +154,9 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
             Log::end_op();
             return Err("exec: Fail to read from inode");
         };
-
         // FIXME: continue but do not add off
         if ph.prog_type != ELF_PROG_LOAD {
+            off += size_of::<ProgHeader>() as u64;
             continue;
         }
         if ph.mem_size < ph.file_size {
@@ -228,6 +231,7 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
             }
             st as usize - argv[argc] as usize
         };
+
         sp -= strlen + 1;
         sp = align_sp(sp);
         if sp < stack_base {
@@ -255,7 +259,7 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
     pgt.copy_out(sp, unsafe {
         &*slice_from_raw_parts(
             user_stack.as_ptr() as *const u8,
-            user_stack.len() * size_of::<usize>(),
+            (argc + 1) * size_of::<usize>(),
         )
     })
     .map_err(|_| {
@@ -274,11 +278,25 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
         pdata.name[idx] = b;
     }
 
+    // pgt.debug(3, 0);
+
+    // println!("{}", elf.entry as usize);
+
+    // let pa = pgt.pgt_translate(VirtualAddress::new(elf.entry as usize));
+    // if let Some(pa) = pa {
+    //     println!("{}", pa.as_usize());
+    // }
+
     // install new pagetable and delete old one
     if let Some(mut old_pgt) = pdata.pagetable.replace(pgt) {
-        old_pgt.proc_free_pagetable(pdata.size);
+        old_pgt.proc_free_pagetable(old_size);
         // delete old pagetable
     }
+
+    // let old_pgt = pdata.pagetable.as_mut().take().unwrap();
+    // old_pgt.proc_free_pagetable(old_size);
+
+    // pdata.pagetable = Some(pgt);
 
     pdata.size = size;
     tf.epc = elf.entry as usize;

@@ -112,14 +112,16 @@ impl ProcManager {
         if let Some(p) = self.alloc_proc() {
             let pdata = unsafe { p.data.as_mut_unchecked() };
             let pgt = pdata.pagetable.as_deref_mut().unwrap();
+            println!("pgt is: {:#x}", pgt as *mut _ as usize);
             unsafe {
                 pgt.uinit(INITCODE);
             };
+            // pgt.debug(3, 0);
             pdata.size = PGSIZE;
 
             let tf = unsafe { &mut *pdata.trapframe };
             tf.epc = 0;
-            tf.sp = 4 * PGSIZE;
+            tf.sp = PGSIZE;
             pdata.set_name("initprog\0".as_bytes());
             pdata.cwd = Some(ICACHE.namei(&ROOTIPATH).expect("cannot find root inode"));
             p.meta
@@ -146,6 +148,7 @@ impl ProcManager {
                 pdata.set_trapframe(tf as *mut RawPage as *mut Trapframe);
                 pdata.pagetable = proc.proc_pagetable();
                 pdata.init_context();
+                drop(g);
                 return Some(proc);
             }
         }
@@ -233,16 +236,22 @@ impl ProcManager {
                             )
                         };
                         if addr != 0 && pgt.copy_out(addr, src).is_err() {
+                            drop(pmeta);
+                            drop(wg);
                             return None;
                         }
                         drop(pmeta);
                         p.free_proc();
+                        drop(wg);
                         return Some(pid);
                     }
+                    drop(pmeta);
                 }
             }
             let pmeta = proc.meta.lock();
             if !have_kids || pmeta.killed {
+                drop(wg);
+                drop(pmeta);
                 return None;
             }
             drop(pmeta);
