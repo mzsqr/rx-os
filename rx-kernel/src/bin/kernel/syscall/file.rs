@@ -139,7 +139,7 @@ impl Syscall<'_> {
 
         let mut count = 0;
         loop {
-            if count > argv.len() {
+            if count >= argv.len() {
                 for i in argv {
                     if !i.is_null() {
                         unsafe {
@@ -151,7 +151,8 @@ impl Syscall<'_> {
                 return Err(());
             }
             let mut buf = [0u8; 8];
-            self.copy_from_addr(argv_addr + size_of::<usize>(), &mut buf)
+
+            self.copy_from_addr(argv_addr + count * size_of::<usize>(), &mut buf)
                 .map_err(|_| ())?;
             let user_arg = usize::from_le_bytes(buf);
             if user_arg == 0 {

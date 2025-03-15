@@ -58,7 +58,7 @@ pub const VIRT_TEST: usize = 0x100000;
 
 // the size of memory: 1G
 // TODO: parse from divece tree
-pub const MEM_SIZE: usize = 8 * 128 * 1024 * 1024;
+pub const MEM_SIZE: usize = 4 * 1024 * 1024 * 1024;
 pub const KERNEL_BASE: usize = 0x80000000;
 pub const PHYSTOP: usize = KERNEL_BASE + MEM_SIZE;
 

@@ -367,7 +367,7 @@ impl Process {
             drop(child_meta);
 
             let mut wg = PROC_MANAGER.wait_list.lock();
-            wg[pdata.id] = self as *const Process as usize;
+            wg[cdata.id] = self as *const Process as usize;
             drop(wg);
 
             Some(proc)

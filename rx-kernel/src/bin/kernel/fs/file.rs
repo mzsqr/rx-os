@@ -5,15 +5,11 @@ use crate::{
         fs::{BSIZE, MAXOPBLOCKS},
         param::NDEV,
     },
+    println,
     process::cpu::CPUManager,
 };
 
-use super::{
-    devices::DEVICE_LIST,
-    inode::Inode,
-    log::Log,
-    stat::Stat,
-};
+use super::{devices::DEVICE_LIST, inode::Inode, log::Log, stat::Stat};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]

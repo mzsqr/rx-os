@@ -11,6 +11,7 @@ use alloc::boxed::Box;
 
 use crate::{
     arch::riscv::qemu::layout::{PGSIZE, STACK_SIZE},
+    println,
     process::cpu::CPUManager,
 };
 
@@ -79,7 +80,8 @@ pub fn copy_from_kernel(
             .pagetable
             .as_deref_mut()
             .unwrap();
-        let _ = pgt.copy_out(dst, src);
+
+        let _ = pgt.copy_out(dst, &src[..count]);
     } else {
         let dst = unsafe { &mut *slice_from_raw_parts_mut(dst as *mut u8, count) };
         dst.copy_from_slice(&src[..count]);

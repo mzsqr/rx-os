@@ -53,7 +53,7 @@ $U/initcode: $U/initcode.S
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
 
 _%: %.o $(ULIB)
-	$(LD) $(LDFLAGS) -T rx-kernel/src/linker/user.ld -o $@ $^
+	$(LD) $(LDFLAGS) -T rx-kernel/src/bin/kernel/linker/user.ld -o $@ $^
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
 
@@ -90,8 +90,8 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 
-fs.img: xv6-mkfs/mkfs README $(UEXTRA) $(UPROGS)
-	xv6-mkfs/mkfs fs.img README $(UEXTRA) $(UPROGS)
+fs.img: xv6-mkfs/mkfs README.md $(UEXTRA) $(UPROGS)
+	xv6-mkfs/mkfs fs.img README.md $(UEXTRA) $(UPROGS)
 
 clean:
 	rm -rf *.tex *.dvi *.idx *.aux *.log *.ind *.ilg *.dSYM *.zip *.pcap \

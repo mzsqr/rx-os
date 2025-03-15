@@ -485,12 +485,6 @@ impl InodeData {
                 continue;
             }
 
-            // println!(
-            //     "{} {}",
-            //     from_utf8(&dir_entry.name).unwrap(),
-            //     from_utf8(name).unwrap()
-            // );
-
             for (&a, b) in name.iter().zip(dir_entry.name) {
                 if a != b {
                     break;

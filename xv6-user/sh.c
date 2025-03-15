@@ -270,7 +270,7 @@ gettoken(char **ps, char *es, char **q, char **eq)
   int ret;
 
   s = *ps;
-  while(s < es && strchr(whitespace, *s))
+  while(s < es && strchr(" \t\r\n\v", *s))
     s++;
   if(q)
     *q = s;
@@ -295,14 +295,14 @@ gettoken(char **ps, char *es, char **q, char **eq)
     break;
   default:
     ret = 'a';
-    while(s < es && !strchr(whitespace, *s) && !strchr(symbols, *s))
+    while(s < es && !strchr(" \t\r\n\v", *s) && !strchr(" \t\r\n\v", *s))
       s++;
     break;
   }
   if(eq)
     *eq = s;
 
-  while(s < es && strchr(whitespace, *s))
+  while(s < es && strchr(" \t\r\n\v", *s))
     s++;
   *ps = s;
   return ret;
@@ -314,7 +314,7 @@ peek(char **ps, char *es, char *toks)
   char *s;
 
   s = *ps;
-  while(s < es && strchr(whitespace, *s))
+  while(s < es && strchr(" \t\r\n\v", *s))
     s++;
   *ps = s;
   return *s && strchr(toks, *s);

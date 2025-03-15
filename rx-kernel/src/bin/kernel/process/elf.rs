@@ -210,6 +210,7 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
         return Err("exec: Fail to ualloc");
     }
 
+    // TODO: userstack
     pgt.uclear(VirtualAddress::new(size - 2 * PGSIZE)); // 用户栈保护页
     let mut sp = size;
     let stack_base = sp - PGSIZE;
@@ -226,7 +227,7 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
         }
         let strlen = unsafe {
             let mut st = argv[argc];
-            while *st != b'0' {
+            while *st != 0 {
                 st = st.add(1);
             }
             st as usize - argv[argc] as usize
@@ -254,6 +255,7 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
     if sp < stack_base {
         // Log::end_op();
         pgt.proc_free_pagetable(size);
+        return Err("exec: Too Many arguments (exceed user stack)");
     }
 
     pgt.copy_out(sp, unsafe {
@@ -302,7 +304,7 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
     tf.epc = elf.entry as usize;
     tf.sp = sp;
 
-    Ok(size)
+    Ok(argc)
 }
 
 #[inline]
