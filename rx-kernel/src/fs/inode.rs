@@ -149,7 +149,6 @@ impl InodeCache {
                 return Some(inode);
             }
 
-            // TODO: ???
             if let Some(last_inode) = data_g.dir_lookup(name) {
                 drop(data_g);
                 inode = last_inode;
@@ -485,6 +484,12 @@ impl InodeData {
             if dir_entry.inum == 0 {
                 continue;
             }
+
+            // println!(
+            //     "{} {}",
+            //     from_utf8(&dir_entry.name).unwrap(),
+            //     from_utf8(name).unwrap()
+            // );
 
             for (&a, b) in name.iter().zip(dir_entry.name) {
                 if a != b {

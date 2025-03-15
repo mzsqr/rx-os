@@ -1,1 +1,1 @@
-pub const CONSOLE: usize = 1;
+pub const CONSOLE: usize = 0;
