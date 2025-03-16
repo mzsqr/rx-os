@@ -63,7 +63,7 @@ impl Syscall<'_> {
         let src = [rf, wf];
         let src_ref =
             unsafe { &*slice_from_raw_parts(src.as_ptr() as *const u8, size_of_val(&src)) };
-        copy_from_kernel(addr, src_ref, true, src_ref.len()).map_err(|_| ())?;
+        unsafe { copy_from_kernel(addr, src_ref, true).map_err(|_| ())? };
         Ok(0)
     }
 

@@ -401,13 +401,14 @@ impl InodeData {
             let len = count - total;
             let block_no = self.map(block_base as u32)?;
             let buf = BCache::read(self.dev, block_no);
-            let write_len = len.min(BSIZE);
+            // TODO: Determinie this write len is legal ^
+            let write_len = len.min(BSIZE - block_offset);
             let src = unsafe {
                 &(*slice_from_raw_parts(buf.raw_data() as *const u8, BSIZE))[block_offset..]
             };
             // println!("{:?}", &src[..write_len]);
             // 复制到dst指向的虚拟地址
-            copy_from_kernel(dst, src, is_user, write_len)?;
+            unsafe { copy_from_kernel(dst, &src[..write_len], is_user)? };
             offset += write_len;
             total += write_len;
             dst += write_len;
@@ -439,13 +440,13 @@ impl InodeData {
             let len = count - total;
             let block_no = self.map(block_base as u32)?;
             let mut buf = BCache::read(self.dev, block_no);
-            let read_len = len.min(BSIZE);
+            let read_len = len.min(BSIZE - block_offset);
             let dst = unsafe {
                 &mut (*slice_from_raw_parts_mut(buf.raw_data_mut() as *mut u8, BSIZE))
                     [block_offset..]
             };
             // 从src复制到缓存块中
-            copy_to_kernel(dst, src, is_user, read_len)?;
+            unsafe { copy_to_kernel(&mut dst[..read_len], src, is_user)? };
             offset += read_len;
             total += read_len;
             src += read_len;

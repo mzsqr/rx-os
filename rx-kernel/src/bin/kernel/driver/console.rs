@@ -94,7 +94,7 @@ pub(super) fn console_read(is_user: bool, mut dst: usize, size: usize) -> Option
 
         // copy to user/kernel space memory
         let cs = unsafe { &*slice_from_raw_parts(&c as *const u8, 1) };
-        if copy_from_kernel(dst, cs, is_user, 1).is_err() {
+        if unsafe { copy_from_kernel(dst, &cs[..1], is_user) }.is_err() {
             break;
         }
 
@@ -117,7 +117,7 @@ pub(super) fn console_write(is_user: bool, mut src: usize, size: usize) -> Optio
     for i in 0..size {
         let mut c = 0u8;
         let cs = unsafe { &mut *slice_from_raw_parts_mut(&mut c as *mut u8, 1) };
-        if copy_to_kernel(cs, src, is_user, 1).is_err() {
+        if unsafe { copy_to_kernel(&mut cs[..1], src, is_user) }.is_err() {
             return Some(i);
         }
         UART.putc(c);

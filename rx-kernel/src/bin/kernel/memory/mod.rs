@@ -46,13 +46,16 @@ pub struct Stack {
 
 impl PageAllocator for Stack {}
 
-// TODO: do not use count
 /// 从用户空间或内核空间中拷贝数据
-pub fn copy_to_kernel(
+/// 从src中拷贝`dst.len()`字节的数据到dst中
+///
+/// # Safety
+///
+/// 确保src中的有效内容至少为`dst.len()`
+pub unsafe fn copy_to_kernel(
     dst: &mut [u8],
     src: usize,
     is_user: bool,
-    count: usize,
 ) -> Result<(), &'static str> {
     if is_user {
         let myproc = unsafe { CPUManager::myproc() }.unwrap();
@@ -60,21 +63,21 @@ pub fn copy_to_kernel(
             .pagetable
             .as_deref_mut()
             .unwrap();
-        let _ = pgt.copy_in(&mut dst[..count], src);
+        let _ = pgt.copy_in(dst, src);
     } else {
-        let src = unsafe { &*slice_from_raw_parts(src as *mut u8, count) };
-        dst[..count].copy_from_slice(src);
+        let src = unsafe { &*slice_from_raw_parts(src as *mut u8, dst.len()) };
+        dst.copy_from_slice(src);
     }
     Ok(())
 }
 
 /// 将内核数据复制到其它位置
-pub fn copy_from_kernel(
-    dst: usize,
-    src: &[u8],
-    is_user: bool,
-    count: usize,
-) -> Result<(), &'static str> {
+/// 将src的全部内容拷贝到dst中
+///
+/// # Safety
+///
+/// 请确保dst至少能够存储`src.len()`字节的数据
+pub unsafe fn copy_from_kernel(dst: usize, src: &[u8], is_user: bool) -> Result<(), &'static str> {
     if is_user {
         let myproc = unsafe { CPUManager::myproc() }.unwrap();
         let pgt = unsafe { myproc.data.as_mut_unchecked() }
@@ -82,10 +85,10 @@ pub fn copy_from_kernel(
             .as_deref_mut()
             .unwrap();
 
-        let _ = pgt.copy_out(dst, &src[..count]);
+        let _ = pgt.copy_out(dst, src);
     } else {
-        let dst = unsafe { &mut *slice_from_raw_parts_mut(dst as *mut u8, count) };
-        dst.copy_from_slice(&src[..count]);
+        let dst = unsafe { &mut *slice_from_raw_parts_mut(dst as *mut u8, src.len()) };
+        dst.copy_from_slice(src);
     }
     Ok(())
 }

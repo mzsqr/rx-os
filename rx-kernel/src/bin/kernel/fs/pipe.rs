@@ -110,7 +110,7 @@ impl Pipe {
             } else {
                 let mut ch = [0u8; 1];
                 pgt.copy_in(&mut ch, addr + i)?;
-                inner.data[inner.nwrite % PGSIZE] = ch[0];
+                inner.data[inner.nwrite % PIPESIZE] = ch[0];
                 inner.nwrite += 1;
                 i += 1;
             }
