@@ -22,6 +22,7 @@ Rust能够对工具链进行统一的管理，为了编译RISCV64目标的程序
 ```sh
 rustup install nightly
 rustup target add riscv64gc-unknown-none-elf
+ rustup component add rust-src
 ```
 
 内核可以方便的运行在QEMU模拟器上，你还需要提前安装RISCV64的QEMU模拟器：
@@ -37,6 +38,7 @@ make -j$(nproc)
 sudo make install  
 ```
 
+在Windows下可以用Msys管理跨平台的工具链以及QEMU
 
 ## 运行
 
