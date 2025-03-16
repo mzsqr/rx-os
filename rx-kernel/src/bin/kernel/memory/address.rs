@@ -6,15 +6,6 @@ use core::ops::{Add, Sub};
 
 use crate::arch::riscv::qemu::layout::{PGMASK, PGMASKLEN, PGSHIFT, PGSIZE};
 
-/// 统一地址,分为用户物理地址，内核物理地址
-/// 用户虚拟地址，内核虚拟地址
-pub enum UnifiedAddress {
-    UserPhysical(PhysicalAddress),
-    KernelPhysical(PhysicalAddress),
-    UserVirtual(VirtualAddress),
-    KernelVirtual(VirtualAddress),
-}
-
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct PhysicalAddress(pub usize);
 

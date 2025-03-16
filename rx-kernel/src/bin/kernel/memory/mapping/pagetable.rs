@@ -327,7 +327,7 @@ impl PageTable {
 
         if page_round_up(new_size) < page_round_up(old_size) {
             let npages = (page_round_up(old_size) - page_round_up(new_size)) / PGSIZE;
-            // unmap
+            self.uunmap(VirtualAddress::new(page_round_up(new_size)), npages, true);
         }
 
         new_size
@@ -420,9 +420,10 @@ impl PageTable {
         }
     }
 
-    // TODO: This two function maybe unsafe
     /// 从内核空间将src指向的内存区域复制到用户空间中。
     /// 拷贝整个src到用户空间。
+    ///
+    /// 安全性的考虑请参见`copy_in`
     pub fn copy_out(&mut self, dst: usize, mut src: &[u8]) -> Result<(), &'static str> {
         let mut va = VirtualAddress::new(dst);
         va.pg_round_down();
@@ -450,7 +451,10 @@ impl PageTable {
         Ok(())
     }
 
-    /// 将用户空间由src指向的dst.len()的内存空间复制到内核空间中。
+    /// 将用户空间由src指向的`dst.len()`字节的内存空间复制到内核空间中。
+    /// 用户空间的物理内存不一定连续，所以需要对跨页的内存镜像处理。
+    ///
+    /// 进程访问的内存如果超过了其地址空间自然不能被页表翻译，所以调用这个函数对内核来说是安全的。
     pub fn copy_in(&mut self, mut dst: &mut [u8], src: usize) -> Result<(), &'static str> {
         let mut va = VirtualAddress::new(src);
         va.pg_round_down();
