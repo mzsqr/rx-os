@@ -14,5 +14,4 @@ num_enum = {version = "0.7.3", default-features = false}
 riscv = "0.13.0"
 spin = "0.9.8"
 uart_16550 = "0.3.2"
-vga = {version = "*", path = "../vga"}
 
