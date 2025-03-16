@@ -9,7 +9,7 @@ use crate::{
     process::cpu::CPUManager,
 };
 
-use super::{devices::DEVICE_LIST, inode::Inode, log::Log, stat::Stat};
+use super::{devices::DEVICE_LIST, inode::Inode, log::Log, pipe::Pipe, stat::Stat};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
@@ -32,16 +32,21 @@ pub enum FileInner {
     File(File),
 }
 
+// TODO: Drop
 #[derive(Debug, Clone)]
 pub struct VFile {
     pub ftype: FileType,
     pub readable: bool,
     pub writeable: bool,
-    // pipe
+    pub pipe: Option<Pipe>,
     pub inode: Option<Inode>,
+    // TODO: concurrent Safety
     pub offset: Cell<u32>,
     pub major: i16,
 }
+
+unsafe impl Send for VFile {}
+unsafe impl Sync for VFile {}
 
 impl VFile {
     pub const fn init() -> Self {
@@ -49,6 +54,7 @@ impl VFile {
             ftype: FileType::None,
             readable: false,
             writeable: false,
+            pipe: None,
             inode: None,
             offset: Cell::new(0),
             major: 0,
@@ -70,7 +76,10 @@ impl VFile {
 
         match self.ftype {
             FileType::None => panic!("Invalid file!"),
-            FileType::Pipe => Err("Not implemented"),
+            FileType::Pipe => {
+                let pipe = self.pipe.as_ref().unwrap();
+                pipe.read(addr, len)
+            }
             FileType::Inode => {
                 let inode = self.inode.as_ref().unwrap();
                 let mut ig = inode.lock();
@@ -105,7 +114,7 @@ impl VFile {
 
         match self.ftype {
             FileType::None => panic!("Invalid file"),
-            FileType::Pipe => unimplemented!(),
+            FileType::Pipe => self.pipe.as_ref().unwrap().write(addr, len),
             FileType::Inode => {
                 let max = ((MAXOPBLOCKS - 1 - 1 - 2) / 2) * BSIZE;
                 let mut count = 0;
@@ -166,6 +175,14 @@ impl VFile {
             pgt.copy_out(addr, stat_buf)?;
 
             Ok(())
+        }
+    }
+}
+
+impl Drop for VFile {
+    fn drop(&mut self) {
+        if self.ftype == FileType::Pipe {
+            self.pipe.as_ref().unwrap().close(self.writeable);
         }
     }
 }

@@ -1,10 +1,10 @@
 use core::{
     cell::Cell,
-    ptr::{null_mut, slice_from_raw_parts_mut},
+    ptr::{null_mut, slice_from_raw_parts, slice_from_raw_parts_mut},
     str::from_utf8,
 };
 
-use alloc::boxed::Box;
+use alloc::{boxed::Box, sync::Arc};
 use array_macro::array;
 use bit_field::BitField;
 
@@ -17,10 +17,11 @@ use crate::{
     fs::{
         dinode::InodeType,
         file::{FileType, VFile},
-        inode::ICACHE,
+        inode::{self, ICACHE},
         log::Log,
+        pipe::Pipe,
     },
-    memory::{PageAllocator, RawPage},
+    memory::{PageAllocator, RawPage, copy_from_kernel},
     println,
     process::elf::exec,
 };
@@ -32,7 +33,7 @@ impl Syscall<'_> {
         let old_fd = self.arg(0);
         let pdata = unsafe { self.process.data.as_mut_unchecked() };
         let file = pdata.open_files[old_fd].as_ref().unwrap();
-        let new_fd = self.process.fd_alloc(file).unwrap();
+        let new_fd = self.process.fd_alloc(Arc::clone(file)).unwrap();
         Ok(new_fd)
     }
 
@@ -54,6 +55,18 @@ impl Syscall<'_> {
         file.write(addr, len).map_err(|_| ())
     }
 
+    pub fn sys_pipe(&self) -> SysResult {
+        let addr = self.arg(0);
+        let (rp, wp) = Pipe::alloc();
+        let rf = self.process.fd_alloc(rp).map_err(|_| ())? as u32;
+        let wf = self.process.fd_alloc(wp).map_err(|_| ())? as u32;
+        let src = [rf, wf];
+        let src_ref =
+            unsafe { &*slice_from_raw_parts(src.as_ptr() as *const u8, size_of_val(&src)) };
+        copy_from_kernel(addr, src_ref, true, src_ref.len()).map_err(|_| ())?;
+        Ok(0)
+    }
+
     pub fn sys_open(&self) -> SysResult {
         let mut path = [0; MAXPATH];
 
@@ -62,17 +75,18 @@ impl Syscall<'_> {
         let open_mode = self.arg(1);
 
         Log::begin_op();
-
-        let inode = match OpenMode::mode(open_mode) {
-            OpenMode::CREATE => match ICACHE.create(&path, InodeType::File, 0, 0) {
+        // TODO: OPEN MODE
+        let inode = if open_mode.get_bit(9) {
+            match ICACHE.create(&path, InodeType::File, 0, 0) {
                 Ok(inode) => inode,
                 Err(err) => {
                     Log::end_op();
                     println!("[rx-os] syscall: sys_open: {err:?}");
                     return Err(());
                 }
-            },
-            _ => match ICACHE.namei(&path) {
+            }
+        } else {
+            match ICACHE.namei(&path) {
                 Some(inode) => {
                     let ig = inode.lock();
                     if ig.dinode.itype == InodeType::Directory
@@ -89,8 +103,9 @@ impl Syscall<'_> {
                     Log::end_op();
                     return Err(());
                 }
-            },
+            }
         };
+
         let mut ig = inode.lock();
 
         let mut file = VFile::init();
@@ -101,11 +116,10 @@ impl Syscall<'_> {
             FileType::Inode
         };
 
-        // TODO: more in OpenMode
         file.writeable = true;
         file.readable = true;
 
-        if open_mode.get_bit(11) && ig.dinode.itype == InodeType::File {
+        if open_mode.get_bit(10) && ig.dinode.itype == InodeType::File {
             ig.truncate(&inode);
         }
 
@@ -116,7 +130,7 @@ impl Syscall<'_> {
         file.inode = Some(inode);
         file.writeable = open_mode.get_bit(0) | open_mode.get_bit(1);
         file.readable = !open_mode.get_bit(0) | open_mode.get_bit(1);
-        let fd = self.process.fd_alloc(&file).map_err(|_| ())?;
+        let fd = self.process.fd_alloc(Arc::new(file)).map_err(|_| ())?;
         Ok(fd)
     }
 

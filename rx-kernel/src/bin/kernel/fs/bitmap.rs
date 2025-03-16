@@ -1,6 +1,6 @@
 use bit_field::BitField;
 
-use crate::arch::riscv::qemu::fs::BPB;
+use crate::{arch::riscv::qemu::fs::BPB, println};
 
 use super::{bio::BCache, log::Log, superblock::SuperBlock};
 

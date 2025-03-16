@@ -326,10 +326,10 @@ impl Process {
         }
     }
 
-    pub fn fd_alloc(&self, file: &VFile) -> Result<usize, &'static str> {
+    pub fn fd_alloc(&self, file: Arc<VFile>) -> Result<usize, &'static str> {
         let pdata = unsafe { self.data.as_mut_unchecked() };
         let fd = pdata.find_unallocated_fd()?;
-        pdata.open_files[fd].replace(Arc::new(file.clone()));
+        pdata.open_files[fd].replace(file);
         Ok(fd)
     }
 

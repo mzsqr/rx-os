@@ -449,7 +449,6 @@ impl InodeData {
             offset += read_len;
             total += read_len;
             src += read_len;
-
             Log::write(buf);
         }
 

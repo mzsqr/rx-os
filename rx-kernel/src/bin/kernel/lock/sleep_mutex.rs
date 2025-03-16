@@ -1,95 +1,85 @@
-//! sleeplock
+use core::{
+    cell::UnsafeCell,
+    ops::{Deref, DerefMut},
+};
 
-use core::cell::{Cell, UnsafeCell};
-use core::ops::{Deref, DerefMut, Drop};
-
-use crate::println;
-use crate::process::cpu::CPUManager;
-use crate::process::manager::PROC_MANAGER;
+use crate::process::{cpu::CPUManager, manager::PROC_MANAGER};
 
 use super::Mutex;
 
-pub struct SleepChannel(u8);
-
 pub struct SleepMutex<T: ?Sized> {
-    lock: Mutex<()>,
-    locked: Cell<bool>,
-    chan: SleepChannel,
+    locked: Mutex<bool>,
     name: &'static str,
     data: UnsafeCell<T>,
 }
 
 unsafe impl<T: ?Sized + Sync> Sync for SleepMutex<T> {}
-// not needed
-// unsafe impl<T: ?Sized + Sync> Send for SleepLock<T> {}
 
 impl<T> SleepMutex<T> {
+    #[inline(always)]
     pub const fn new(data: T, name: &'static str) -> Self {
         Self {
-            lock: Mutex::new((), "sleeplock"),
-            locked: Cell::new(false),
-            chan: SleepChannel(0),
+            locked: Mutex::new(false, "Sleep lock"),
             name,
             data: UnsafeCell::new(data),
         }
     }
 }
 
+pub struct SleepMutexGuard<'a, T: ?Sized + 'a> {
+    data: *mut T,
+    guard: &'a SleepMutex<T>,
+}
+
+unsafe impl<T: ?Sized + Send> Send for SleepMutexGuard<'_, T> {}
+
 impl<T: ?Sized> SleepMutex<T> {
-    /// non-blocking, but might sleep if other p lock this sleeplock
-    pub fn lock(&self) -> SleepMutexGuard<T> {
-        let mut guard = self.lock.lock();
-        while self.locked.get() {
+    pub fn lock(&self) -> SleepMutexGuard<'_, T> {
+        let mut guard = self.locked.lock();
+        while *guard {
             unsafe {
-                CPUManager::myproc()
-                    .unwrap()
-                    .sleep(self.locked.as_ptr() as usize, guard);
+                // sleep and release guard
+                if let Some(p) = CPUManager::myproc() {
+                    p.sleep(self.locked.as_ptr() as usize, guard);
+                }
             }
-            guard = self.lock.lock();
+            guard = self.locked.lock();
         }
-        self.locked.set(true);
+        *guard = true;
         drop(guard);
         SleepMutexGuard {
-            lock: self,
-            data: unsafe { &mut *self.data.get() },
+            guard: self,
+            data: self.data.get(),
         }
     }
 
-    /// Called by its guard when dropped
     pub fn unlock(&self) {
-        let guard = self.lock.lock();
-        self.locked.set(false);
-        self.wake_up();
+        let mut guard = self.locked.lock();
+        *guard = false;
+        self.wake_up(self.locked.as_ptr() as usize);
         drop(guard);
     }
 
-    fn wake_up(&self) {
-        PROC_MANAGER.wake_up(self.locked.as_ptr() as usize);
+    fn wake_up(&self, chan: usize) {
+        PROC_MANAGER.wake_up(chan);
     }
 }
 
-pub struct SleepMutexGuard<'a, T: ?Sized + 'a> {
-    lock: &'a SleepMutex<T>,
-    data: &'a mut T,
-}
-
-impl<'a, T: ?Sized> Deref for SleepMutexGuard<'a, T> {
+impl<T: ?Sized> Deref for SleepMutexGuard<'_, T> {
     type Target = T;
-    fn deref(&self) -> &T {
-        &*self.data
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.data }
     }
 }
 
-impl<'a, T: ?Sized> DerefMut for SleepMutexGuard<'a, T> {
-    fn deref_mut(&mut self) -> &mut T {
-        &mut *self.data
+impl<T: ?Sized> DerefMut for SleepMutexGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.data }
     }
 }
 
-impl<'a, T: ?Sized> Drop for SleepMutexGuard<'a, T> {
-    /// The dropping of the SpinLockGuard will call spinlock's release_lock(),
-    /// through its reference to its original spinlock.
+impl<T: ?Sized> Drop for SleepMutexGuard<'_, T> {
     fn drop(&mut self) {
-        self.lock.unlock();
+        self.guard.unlock();
     }
 }

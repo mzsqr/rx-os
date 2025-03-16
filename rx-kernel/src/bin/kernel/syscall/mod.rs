@@ -80,7 +80,7 @@ impl Syscall<'_> {
             SyscallNum::SysFork => self.sys_fork(),
             SyscallNum::SysExit => self.sys_exit(),
             SyscallNum::SysWait => self.sys_wait(),
-            SyscallNum::SysPipe => unimplemented!(),
+            SyscallNum::SysPipe => self.sys_pipe(),
             SyscallNum::SysRead => self.sys_read(),
             SyscallNum::SysKill => unimplemented!(),
             SyscallNum::SysExec => self.sys_exec(),

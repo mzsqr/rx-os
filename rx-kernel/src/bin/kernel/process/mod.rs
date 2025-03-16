@@ -5,7 +5,6 @@ use process::ProcState;
 use crate::{
     arch::riscv::qemu::fs::ROOTDEV,
     fs::{self, log::Log},
-    println,
     trap::user_trap_ret,
 };
 
@@ -53,9 +52,9 @@ pub fn exit(status: i32) -> ! {
 
     // 将子进程的父进程改为init
     // 通知父进程的等待
-    let wg = PROC_MANAGER.wait_list.lock();
+    let mut wg = PROC_MANAGER.wait_list.lock();
     // TODO: reparent
-    // PROC_MANAGER.reparent(&mut *wg, myproc);
+    PROC_MANAGER.reparent(&mut *wg, myproc);
     PROC_MANAGER.wake_up(wg[pdata.id]);
 
     let mut pmeta = myproc.meta.lock();

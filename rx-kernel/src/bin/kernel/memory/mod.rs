@@ -46,6 +46,7 @@ pub struct Stack {
 
 impl PageAllocator for Stack {}
 
+// TODO: do not use count
 /// 从用户空间或内核空间中拷贝数据
 pub fn copy_to_kernel(
     dst: &mut [u8],
@@ -59,7 +60,7 @@ pub fn copy_to_kernel(
             .pagetable
             .as_deref_mut()
             .unwrap();
-        let _ = pgt.copy_in(dst, src);
+        let _ = pgt.copy_in(&mut dst[..count], src);
     } else {
         let src = unsafe { &*slice_from_raw_parts(src as *mut u8, count) };
         dst[..count].copy_from_slice(src);

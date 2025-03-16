@@ -6,7 +6,7 @@ use core::{
 use crate::{
     arch::riscv::qemu::fs::{BSIZE, LOGSIZE, MAXOPBLOCKS},
     fs::{bio::BufData, superblock::SuperBlock},
-    lock::Mutex,
+    lock::{self, Mutex},
     println,
     process::{cpu::CPUManager, manager::PROC_MANAGER},
 };
@@ -45,7 +45,8 @@ impl Log {
         debug_assert_eq!(align_of::<BufData>() % align_of::<LogHeader>(), 0);
 
         let (start, nlog) = SuperBlock::read_log();
-        let g = unsafe { &mut *LOG.raw_data_mut_unchecked() };
+        // let g = unsafe { &mut *LOG.raw_data_mut_unchecked() };
+        let g = lock::MutexGuard::leak(LOG.lock());
         g.start = start;
         g.size = nlog;
         g.dev = dev;
@@ -190,7 +191,7 @@ impl Log {
             }
         }
 
-        if g.no_space() {
+        if g.lh.len as usize + 2 >= LOGSIZE || g.lh.len + 2 >= g.size {
             panic!("log: not enough space for this transaction");
         }
 
