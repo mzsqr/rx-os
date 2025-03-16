@@ -7,9 +7,12 @@ edition = "2024"
 array-macro = "2.1.8"
 bit_field = "0.10.2"
 bitflags = "2.9.0"
+embedded-graphics = "0.8.1"
 lazy_static = { version = "1.5.0", features = ["spin_no_std"] }
 linked_list_allocator = "0.10.5"
+num_enum = {version = "0.7.3", default-features = false}
 riscv = "0.13.0"
 spin = "0.9.8"
 uart_16550 = "0.3.2"
+vga = {version = "*", path = "../vga"}
 
