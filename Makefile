@@ -95,7 +95,10 @@ fs.img: xv6-mkfs/mkfs README.md $(UEXTRA) $(UPROGS)
 
 clean:
 	rm -rf *.tex *.dvi *.idx *.aux *.log *.ind *.ilg *.dSYM *.zip *.pcap \
-	*/*.o */*.d */*.asm */*.sym \
+	*/*.o */*.d */*.asm */*.sym target \
 	$U/initcode $U/initcode.out $U/usys.S $U/_* \
 	mkfs/mkfs fs.img fs.img.bk .gdbinit __pycache__ xv6.out* \
 	ph barrier
+
+qemu: fs.img
+	cargo run 
