@@ -40,8 +40,10 @@ use arch::riscv::{
     qemu::{layout::STACK_SIZE, param::NCPU},
     register::sstatus,
 };
+use asm::timervec;
 use driver::{
     plic::{plic_init, plic_init_hart},
+    vga::init_vga,
     virtio_disk::DISK,
 };
 use logo::LOGO;
@@ -53,11 +55,6 @@ use riscv::register::{self, medeleg::Medeleg, mideleg::Mideleg, satp::Satp};
 
 static mut TIMER_SCRATCH: [[u64; 5]; NCPU] = [[0u64; 5]; NCPU];
 static STARTED: AtomicBool = AtomicBool::new(false);
-// 为什么非要把这个连接到数据段才行呢？
-#[unsafe(link_section = ".data")]
-#[allow(unused)]
-#[unsafe(no_mangle)]
-pub static mut STACK0: [u8; STACK_SIZE * NCPU] = [0; STACK_SIZE * NCPU];
 
 /// # Safety
 /// 由entry.S调用
@@ -119,11 +116,6 @@ unsafe fn timer_init() {
         TIMER_SCRATCH[id][4] = interval;
         register::mscratch::write(TIMER_SCRATCH[id].as_ptr() as usize);
 
-        // set the machine-mode trap handler.
-        unsafe extern "C" {
-            fn timervec();
-        }
-
         register::mtvec::write(register::mtvec::Mtvec::from_bits(timervec as usize));
 
         // enable machine-mode interrupts.
@@ -142,9 +134,9 @@ unsafe fn timer_init() {
 unsafe extern "C" fn rust_main() {
     unsafe {
         if cpu::cpuid() == 0 {
-            // init_vga();
-
             driver::console::init();
+
+            // init_vga();
 
             println!("{}", LOGO);
             println!("rx-os kernel is booting!");

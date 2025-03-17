@@ -1,7 +1,7 @@
 use crate::println;
 
 #[allow(unused)]
-unsafe fn init_vga() {
+pub unsafe fn init_vga() {
     let fb_base = 0x5000_0000 as *mut u8;
 
     unsafe {
