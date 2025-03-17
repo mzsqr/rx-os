@@ -1,6 +1,6 @@
 use core::cell::UnsafeCell;
 
-use crate::lock::MutexGuard;
+use crate::{asm::switch, lock::MutexGuard};
 use array_macro::array;
 
 use crate::{
@@ -55,10 +55,6 @@ impl CPU {
         guard: MutexGuard<'a, ProcMeta>,
         ctx: *mut Context,
     ) -> MutexGuard<'a, ProcMeta> {
-        unsafe extern "C" {
-            fn switch(old: *mut Context, new: *mut Context);
-        }
-
         if self.noff != 1 {
             println!("self noff is {}", self.noff);
             panic!("sched: cpu hold multiple locks");
@@ -139,9 +135,6 @@ impl CPUManager {
     }
 
     pub unsafe fn scheduler() {
-        unsafe extern "C" {
-            fn switch(old: *mut Context, new: *mut Context);
-        }
         let c = unsafe { Self::mycpu() };
         loop {
             unsafe { sstatus::intr_on() };

@@ -10,16 +10,12 @@ use core::alloc::Layout;
 
 use linked_list_allocator::LockedHeap;
 
-use crate::{arch::riscv::qemu::layout::PHYSTOP, println};
+use crate::{arch::riscv::qemu::layout::PHYSTOP, asm::end, println};
 
 use super::mapping::page_round_up;
 
 #[global_allocator]
 pub static ALLOCATOR: LockedHeap = LockedHeap::empty();
-
-unsafe extern "C" {
-    fn end();
-}
 
 #[alloc_error_handler]
 fn alloc_error_handler(layout: Layout) -> ! {

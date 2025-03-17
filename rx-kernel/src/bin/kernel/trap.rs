@@ -13,6 +13,7 @@ use crate::{
         qemu::layout::{TRAMPOLINE, TRAPFRAME, UART0_IRQ, VIRTIO0_IRQ},
         register::sstatus,
     },
+    asm::{kernelvec, trampoline, userret, uservec},
     driver::{
         plic::{plic_claim, plic_complete},
         uart::UART,
@@ -32,14 +33,6 @@ use crate::{
 };
 
 pub static TICKS: Mutex<usize> = Mutex::new(0, "TICKS");
-
-unsafe extern "C" {
-    fn kernelvec();
-    fn uservec();
-    fn trampoline();
-    fn userret();
-    fn etext();
-}
 /// 配置内核的异常处理程序
 pub unsafe fn init_hart() {
     unsafe { stvec::write(Stvec::from_bits(kernelvec as usize)) };

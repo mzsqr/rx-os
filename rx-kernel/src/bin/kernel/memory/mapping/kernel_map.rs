@@ -10,6 +10,7 @@ use crate::{
         },
         register::{satp, sfence_vma},
     },
+    asm::{etext, trampoline},
     memory::{
         RawPage,
         address::{PhysicalAddress, VirtualAddress},
@@ -20,14 +21,6 @@ use crate::{
 };
 
 use super::pagetable::PageTable;
-
-unsafe extern "C" {
-    // define in linker
-    fn etext();
-
-    // define in trampoline.S
-    fn trampoline();
-}
 
 // 内核页表如果不会被同时访问，采用如下抽象
 

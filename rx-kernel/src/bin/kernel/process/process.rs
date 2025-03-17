@@ -2,8 +2,10 @@ use core::{cell::UnsafeCell, ptr::null_mut};
 
 use crate::{
     arch::riscv::qemu::{fs::NFILE, layout::STACK_SIZE},
+    asm::trampoline,
     fs::{file::VFile, inode::Inode},
     lock::{Mutex, MutexGuard},
+    trap::user_trap,
 };
 use alloc::{boxed::Box, sync::Arc};
 use array_macro::array;
@@ -136,10 +138,6 @@ impl ProcData {
     /// # Safety
     /// 要提前分配Trapframe
     pub unsafe fn proc_pagetable(&mut self) -> Option<Box<PageTable>> {
-        unsafe extern "C" {
-            fn trampoline();
-        }
-
         let mut pgt = PageTable::unew();
         // TODO: chain this error with Option in map function
         if !unsafe {
@@ -170,10 +168,6 @@ impl ProcData {
     }
 
     pub fn user_init(&mut self) {
-        unsafe extern "C" {
-            fn user_trap();
-        }
-
         let tf = unsafe { &mut *self.trapframe };
 
         tf.kernel_satp = unsafe { satp::read() };
