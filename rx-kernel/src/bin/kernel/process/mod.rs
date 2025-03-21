@@ -76,7 +76,7 @@ pub fn exit(status: i32) -> ! {
     // 通知父进程的等待
     let mut wg = PROC_MANAGER.wait_list.lock();
     // TODO: reparent
-    PROC_MANAGER.reparent(&mut *wg, myproc);
+    unsafe { PROC_MANAGER.reparent(&mut *wg, myproc) };
     PROC_MANAGER.wake_up(wg[pdata.id]);
 
     let mut pmeta = myproc.meta.lock();

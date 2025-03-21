@@ -1,4 +1,5 @@
 use num_enum::FromPrimitive;
+use rx_kernel::syscall::SyscallNum;
 
 use crate::{
     println,
@@ -35,34 +36,6 @@ pub fn syscall_handler() {
         (*tf).ax[0] = ret;
     }
     // save return value in a0
-}
-
-#[derive(Debug, FromPrimitive)]
-#[repr(usize)]
-pub enum SyscallNum {
-    SysFork = 1,
-    SysExit = 2,
-    SysWait = 3,
-    SysPipe = 4,
-    SysRead = 5,
-    SysKill = 6,
-    SysExec = 7,
-    SysFstat = 8,
-    SysChdir = 9,
-    SysDup = 10,
-    SysGetPid = 11,
-    SysSbrk = 12,
-    SysSleep = 13,
-    SysUptime = 14,
-    SysOpen = 15,
-    SysWrite = 16,
-    SysMknod = 17,
-    SysUnlink = 18,
-    SysLink = 19,
-    SysMkdir = 20,
-    SysClose = 21,
-    #[default]
-    Unknown,
 }
 
 pub struct Syscall<'a> {
