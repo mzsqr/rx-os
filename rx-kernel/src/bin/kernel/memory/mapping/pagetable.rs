@@ -585,6 +585,7 @@ impl PageTable {
     }
 
     pub fn proc_free_pagetable(&mut self, size: usize) {
+        self.ufree_stack();
         // TODO: 或者这个放在进程表中
         self.uunmap(VirtualAddress::new(TRAMPOLINE), 1, false);
         self.uunmap(VirtualAddress::new(TRAPFRAME), 1, false);
