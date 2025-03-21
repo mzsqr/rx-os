@@ -5,7 +5,7 @@ use array_macro::array;
 use spin::Once;
 
 use crate::arch::riscv::qemu::fs::ROOTIPATH;
-use crate::arch::riscv::qemu::layout::{STACK_SIZE, TRAPFRAME};
+use crate::arch::riscv::qemu::layout::{STACK_SIZE, TRAPFRAME, USTACK_BASE, USTACK_SIZE};
 use crate::fs::inode::ICACHE;
 use crate::fs::log::Log;
 use crate::lock::Mutex;
@@ -124,7 +124,8 @@ impl ProcManager {
 
             let tf = unsafe { &mut *pdata.trapframe };
             tf.epc = 0;
-            tf.sp = PGSIZE;
+            // tf.sp = PGSIZE;
+            tf.sp = USTACK_BASE + USTACK_SIZE;
             pdata.set_name("initprog\0".as_bytes());
             pdata.cwd = Some(ICACHE.namei(&ROOTIPATH).expect("cannot find root inode"));
             p.meta

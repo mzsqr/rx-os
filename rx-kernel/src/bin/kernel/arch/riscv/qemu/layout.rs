@@ -46,9 +46,10 @@ pub const VIRT_TEST: usize = 0x100000;
 /// Address zero first:
 ///   text
 ///   original data and bss
-///   fixed-size stack
 ///   expandable heap
 ///   ...
+///     stack-guard page
+///     fixed-size stack
 ///   TRAPFRAME (p->trapframe, used by the trampoline)
 ///   TRAMPOLINE (the same page as in the kernel)
 
@@ -78,3 +79,6 @@ pub const MAXVA: usize = 1 << (9 + 9 + 9 + 12 - 1);
 // in both user and kernel space.
 pub const TRAMPOLINE: usize = MAXVA - PGSIZE;
 pub const TRAPFRAME: usize = TRAMPOLINE - PGSIZE;
+
+pub const USTACK_SIZE: usize = PGSIZE;
+pub const USTACK_BASE: usize = TRAPFRAME - PGSIZE;

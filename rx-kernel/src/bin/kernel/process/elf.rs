@@ -1,7 +1,10 @@
 use core::ptr::slice_from_raw_parts;
 
 use crate::{
-    arch::riscv::qemu::{layout::PGSIZE, param::MAXARG},
+    arch::riscv::qemu::{
+        layout::{PGSIZE, STACK_SIZE, USTACK_BASE, USTACK_SIZE},
+        param::MAXARG,
+    },
     fs::{
         inode::{ICACHE, InodeData},
         log::Log,
@@ -203,17 +206,23 @@ pub unsafe fn exec(path: &str, argv: &[*const u8]) -> Result<usize, &'static str
     Log::end_op();
 
     size = page_round_up(size);
-    if let Some(sz) = unsafe { pgt.ualloc(size, size + 2 * PGSIZE) } {
-        size = sz;
-    } else {
-        pgt.proc_free_pagetable(size);
-        return Err("exec: Fail to ualloc");
-    }
+    // if let Some(sz) = unsafe { pgt.ualloc(size, size + USTACK_SIZE + PGSIZE) } {
+    //     size = sz;
+    // } else {
+    //     pgt.proc_free_pagetable(size);
+    //     return Err("exec: Fail to ualloc");
+    // }
 
-    // TODO: userstack
-    pgt.uclear(VirtualAddress::new(size - 2 * PGSIZE)); // 用户栈保护页
-    let mut sp = size;
-    let stack_base = sp - PGSIZE;
+    // pgt.uclear(VirtualAddress::new(size - PGSIZE - USTACK_SIZE)); // 用户栈保护页
+    // let mut sp = size;
+    // let stack_base = sp - PGSIZE;
+
+    if !pgt.ualloc_stack() {
+        pgt.proc_free_pagetable(size);
+        return Err("exec: Fail to ualloc stack");
+    }
+    let mut sp = USTACK_BASE + USTACK_SIZE;
+    let stack_base = USTACK_BASE;
 
     let mut argc = 0;
     let mut user_stack = [0_usize; MAXARG];

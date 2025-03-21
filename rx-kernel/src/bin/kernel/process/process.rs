@@ -337,8 +337,9 @@ impl Process {
                 .zip(cdata.pagetable.as_deref_mut())
             {
                 unsafe {
-                    pgt.ucopy(ch_pgt, pdata.size)
-                        .expect("fork: Failed to copy data from parent process.")
+                    pgt.ucopy(ch_pgt, VirtualAddress::new(0), pdata.size)
+                        .expect("fork: Failed to copy data from parent process.");
+                    pgt.ucopy_stack(ch_pgt);
                 };
             }
 

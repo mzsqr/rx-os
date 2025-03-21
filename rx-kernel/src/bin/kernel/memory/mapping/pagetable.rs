@@ -29,9 +29,11 @@ use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 use alloc::boxed::Box;
 
 use crate::{
-    arch::riscv::qemu::layout::{MAXVA, PGSHIFT, PGSIZE, TRAMPOLINE, TRAPFRAME},
+    arch::riscv::qemu::layout::{
+        MAXVA, PGSHIFT, PGSIZE, TRAMPOLINE, TRAPFRAME, USTACK_BASE, USTACK_SIZE,
+    },
     memory::{
-        PageAllocator, RawPage,
+        PageAllocator, RawPage, UStack,
         address::{Addr, PhysicalAddress, VirtualAddress},
     },
     println,
@@ -270,6 +272,8 @@ impl PageTable {
             );
         }
 
+        self.ualloc_stack();
+
         mem.data[..src.len()].copy_from_slice(src);
     }
 
@@ -306,6 +310,63 @@ impl PageTable {
         }
 
         Some(new_size)
+    }
+
+    pub fn ualloc_stack(&mut self) -> bool {
+        let mem = unsafe { UStack::new_zeroed() };
+        let addr = mem as *const UStack as usize;
+        mem.data.fill(0);
+
+        unsafe {
+            if !self.map(
+                VirtualAddress::new(USTACK_BASE),
+                PhysicalAddress::new(addr),
+                USTACK_SIZE,
+                // FIXME: custom perm
+                PteFlags::W | PteFlags::R | PteFlags::U,
+            ) {
+                mem.drop();
+                return false;
+            }
+        }
+
+        let guard = unsafe { RawPage::new_zeroed() };
+        let addr = guard as *const RawPage as usize;
+
+        unsafe {
+            if !self.map(
+                VirtualAddress::new(USTACK_BASE - PGSIZE),
+                PhysicalAddress::new(addr),
+                PGSIZE,
+                PteFlags::empty(),
+            ) {
+                self.uunmap(VirtualAddress::new(USTACK_BASE), USTACK_SIZE / PGSIZE, true);
+                guard.drop();
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn ufree_stack(&mut self) {
+        self.uunmap(
+            VirtualAddress(USTACK_BASE - PGSIZE),
+            USTACK_SIZE / PGSIZE + 1,
+            true,
+        );
+    }
+
+    pub fn ucopy_stack(&mut self, other: &mut Self) {
+        unsafe {
+            // TODO: DON'T COPY GUARD
+            self.ucopy(
+                other,
+                VirtualAddress::new(USTACK_BASE - PGSIZE),
+                USTACK_SIZE + PGSIZE,
+            )
+            .unwrap()
+        }
     }
 
     /// 释放用户内存页面
@@ -370,12 +431,19 @@ impl PageTable {
 
     /// 根据父进程的页表信息将父进程的内存拷贝给子进程并映射
     /// 失败时会自动释放内存
+    /// self --> other
     ///
     /// # Safety
     /// TODO:
-    pub unsafe fn ucopy(&mut self, other: &mut Self, size: usize) -> Result<(), &'static str> {
-        let mut va = VirtualAddress::new(0);
-        while va.as_usize() != size {
+    pub unsafe fn ucopy(
+        &mut self,
+        other: &mut Self,
+        mut va: VirtualAddress,
+        size: usize,
+    ) -> Result<(), &'static str> {
+        // let mut va = VirtualAddress::new(0);
+        let start = va.as_usize();
+        while va.as_usize() != size + start {
             if let Some(pte) = self.translate(va, false) {
                 if !pte.is_valid() {
                     panic!("ucopy: page not present");
