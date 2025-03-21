@@ -8,6 +8,8 @@ use rx_kernel::syscall::exit;
 #[unsafe(no_mangle)]
 fn main() {
     rx_kernel::syscall::write(1, "hello world\n".as_bytes());
+    rx_kernel::syscall::mkdir("a\0".as_bytes());
+    rx_kernel::syscall::write(1, "HERE\n".as_bytes());
 }
 
 #[panic_handler]
