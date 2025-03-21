@@ -1,0 +1,16 @@
+[unstable]
+build-std = ["panic_abort"]
+
+[build]
+target = "riscv64gc-unknown-none-elf"
+
+# 使用我们的 kernel script 来进行链接
+[target.riscv64gc-unknown-none-elf]
+# 不能使用默认的rust-lld
+linker = "riscv64-unknown-elf-ld"
+rustflags = [
+    "-C", "link-arg=-Trx-kernel/src/bin/kernel/linker/user.ld",
+]
+
+[term]
+verbose = true

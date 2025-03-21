@@ -123,6 +123,8 @@ impl ProcData {
         &mut self.context
     }
 
+    /// 分配完进程后返回用户空间前所需执行的剩下内容
+    /// 设定改进程对应内核栈的位置
     pub fn init_context(&mut self) {
         let kstack = self.kstack;
         self.context.write_zero();
@@ -218,30 +220,19 @@ impl Process {
         self.meta.lock().pid
     }
 
-    pub fn set_state(&self, state: ProcState) {
-        self.meta.lock().set_state(state);
-    }
-
     pub fn set_killed(&self, killed: bool) {
         self.meta.lock().killed = killed;
-    }
-
-    pub fn state(&self) -> ProcState {
-        self.meta.lock().state
-    }
-
-    pub fn name(&self) -> &[u8] {
-        unsafe { &self.data.as_ref_unchecked().name }
-    }
-
-    pub fn page_table(&mut self) -> &mut PageTable {
-        unsafe { self.data.as_mut_unchecked().pagetable.as_mut().unwrap() }
     }
 
     pub fn proc_pagetable(&self) -> Option<Box<PageTable>> {
         unsafe { self.data.as_mut_unchecked().proc_pagetable() }
     }
 
+    /// 释放一个进程
+    ///     1. 释放给进程分配的页面
+    ///     2. 释放给进程的页表
+    ///     3. 进程的子进程的父进程改为init
+    ///     4. 恢复PCB的可用性
     pub fn free_proc(&self) {
         let pdata = unsafe { self.data.as_mut_unchecked() };
 
@@ -267,10 +258,9 @@ impl Process {
         meta.killed = false;
         meta.xstate = 0;
         meta.set_state(ProcState::Unused);
-
-        drop(meta);
     }
 
+    /// 增大或减小进程的地址空间
     pub fn grow_proc(&self, count: isize) -> Result<(), &'static str> {
         let pdata = unsafe { self.data.as_mut_unchecked() };
         let mut size = pdata.size;
@@ -295,6 +285,9 @@ impl Process {
         Ok(())
     }
 
+    /// 让出CPU
+    /// 产生时钟中断时主动让出CPU
+    /// 调用sched确认锁并通过switch保存上下文回到调度器
     pub fn yielding(&self) {
         let mut pmeta = self.meta.lock();
         pmeta.set_state(ProcState::Runnable);
@@ -302,9 +295,11 @@ impl Process {
             let c = CPUManager::mycpu();
             pmeta = c.sched(pmeta, self.data.as_mut_unchecked().get_context_mut());
         }
-        drop(pmeta);
     }
 
+    /// 让出CPU，并设置其阻塞条件
+    /// 等待阻塞事件（如磁盘读写）时主动让出CPU
+    /// 调用sched确认锁并通过switch保存上下文回到调度器
     pub fn sleep<T>(&self, chan: usize, lock: MutexGuard<'_, T>) {
         let mut g = self.meta.lock();
         drop(lock);
@@ -320,6 +315,9 @@ impl Process {
         }
     }
 
+    /// 为打开的文件分配一个文件描述符表项
+    /// 父子进程有不同的文件描述符表
+    /// 但是初始时的文件描述符都指向同样的打开文件，他们会共享同样的文件读写状态
     pub fn fd_alloc(&self, file: Arc<VFile>) -> Result<usize, &'static str> {
         let pdata = unsafe { self.data.as_mut_unchecked() };
         let fd = pdata.find_unallocated_fd()?;
@@ -327,6 +325,8 @@ impl Process {
         Ok(fd)
     }
 
+    /// 分配子进程
+    /// 复制父进程的进程映像给子进程
     pub fn fork(&self) -> Option<&Self> {
         if let Some(proc) = PROC_MANAGER.alloc_proc() {
             let pdata = unsafe { self.data.as_mut_unchecked() };
@@ -346,7 +346,7 @@ impl Process {
             let ch_ptf = cdata.trapframe;
             unsafe {
                 *ch_ptf = *ptf;
-                (*ch_ptf).ax[0] = 0;
+                (*ch_ptf).ax[0] = 0; // a0=0 for fork return value
             }
 
             //  Files
@@ -362,7 +362,6 @@ impl Process {
 
             let mut wg = PROC_MANAGER.wait_list.lock();
             wg[cdata.id] = self as *const Process as usize;
-            drop(wg);
 
             Some(proc)
         } else {

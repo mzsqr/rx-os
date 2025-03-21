@@ -129,11 +129,15 @@ main(int argc, char *argv[])
 
   for(i = 2; i < argc; i++){
     // get rid of "user/"
-    char *shortname;
-    if(strncmp(argv[i], "xv6-user/", 9) == 0)
-      shortname = argv[i] + 9;
-    else
-      shortname = argv[i];
+    char *shortname = argv[i] + strlen(argv[i]);
+    while(*shortname!='/') {
+      shortname--;
+    }
+    shortname ++;
+    // if(strncmp(argv[i], "xv6-user/", 9) == 0)
+    //   shortname = argv[i] + 9;
+    // else
+    //   shortname = argv[i];
     
     assert(index(shortname, '/') == 0);
 

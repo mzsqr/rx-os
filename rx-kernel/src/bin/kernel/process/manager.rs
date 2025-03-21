@@ -106,6 +106,9 @@ impl ProcManager {
         None
     }
 
+    /// 由操作系统加载的第一个进程
+    /// 第一个进程负责加载init进程
+    /// 在返回到用户空间前初始化文件系统
     pub unsafe fn user_init(&self) {
         println!("first user process init......");
 
@@ -134,6 +137,11 @@ impl ProcManager {
         }
     }
 
+    /// 找一个空闲的PCB分配给一个新进程
+    ///     1. 分配PID
+    ///     2. 设置状态
+    ///     3. 分配Trapframe
+    ///     4. 初始化Context配置转到改进程时执行的forkret
     pub fn alloc_proc(&self) -> Option<&Process> {
         let pid = self.alloc_pid();
         for proc in &self.proc {
@@ -148,13 +156,16 @@ impl ProcManager {
                 pdata.set_trapframe(tf as *mut RawPage as *mut Trapframe);
                 pdata.pagetable = proc.proc_pagetable();
                 pdata.init_context();
-                drop(g);
                 return Some(proc);
             }
         }
         None
     }
 
+    /// 唤醒在某个条件上等待的进程
+    /// 不会导致进程切换
+    ///
+    /// channel 必须和sleep的一致
     pub fn wake_up(&self, channel: usize) {
         for p in self.proc.iter() {
             if let Some(mp) = unsafe { CPUManager::myproc() } {
@@ -172,9 +183,11 @@ impl ProcManager {
         }
     }
 
-    /// 要提前持有wait锁
     /// 将该进程的所有子进程的父进程改为init
-    pub fn reparent(&self, wait_list: &mut [usize], proc: &Process) {
+    ///
+    /// # Safety
+    /// 要提前持有wait锁
+    pub unsafe fn reparent(&self, wait_list: &mut [usize], proc: &Process) {
         let addr = proc as *const _ as usize;
         // wait_list 和 init_proc存的都是地址
         for p in wait_list.iter_mut() {
@@ -200,7 +213,7 @@ impl ProcManager {
         // 将子进程的父进程改为init
         // 通知父进程的等待
         let mut wg = self.wait_list.lock();
-        self.reparent(&mut *wg, myproc);
+        unsafe { self.reparent(&mut *wg, myproc) };
         self.wake_up(wg[pdata.id]);
 
         let mut pmeta = myproc.meta.lock();
@@ -275,6 +288,7 @@ impl ProcManager {
     }
 
     /// 打印进程列表
+    #[allow(unused)]
     pub fn proc_dump(&self) {
         for p in &self.proc {
             let pmeta = p.meta.lock();
@@ -283,7 +297,7 @@ impl ProcManager {
                     "pid: {} state {:?} name: {:?}",
                     pmeta.pid,
                     pmeta.state,
-                    p.name()
+                    unsafe { p.data.as_ref_unchecked() }.name
                 );
             }
         }

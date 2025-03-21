@@ -1,4 +1,3 @@
 [workspace]
-members = ["rx-kernel"]
+members = [ "cargo-rxmkfs","rx-kernel", "rx-user"]
 resolver = "3"
-exclude = ["vga", "riscv-vga-sample"]
