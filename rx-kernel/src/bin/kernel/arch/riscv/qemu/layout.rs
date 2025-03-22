@@ -82,3 +82,5 @@ pub const TRAPFRAME: usize = TRAMPOLINE - PGSIZE;
 
 pub const USTACK_SIZE: usize = PGSIZE;
 pub const USTACK_BASE: usize = TRAPFRAME - PGSIZE;
+
+pub const HUGE_PGSIZE: usize = 0x200000;

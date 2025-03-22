@@ -10,7 +10,7 @@ use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 use alloc::boxed::Box;
 
 use crate::{
-    arch::riscv::qemu::layout::{PGSIZE, STACK_SIZE, USTACK_SIZE},
+    arch::riscv::qemu::layout::{HUGE_PGSIZE, PGSIZE, STACK_SIZE, USTACK_SIZE},
     println,
     process::cpu::CPUManager,
 };
@@ -52,6 +52,13 @@ pub struct UStack {
 }
 
 impl PageAllocator for UStack {}
+
+#[repr(C, align(0x200000))]
+pub struct HugePage {
+    data: [u8; HUGE_PGSIZE],
+}
+
+impl PageAllocator for HugePage {}
 
 /// 从用户空间或内核空间中拷贝数据
 /// 从src中拷贝`dst.len()`字节的数据到dst中

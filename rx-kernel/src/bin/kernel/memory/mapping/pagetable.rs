@@ -30,7 +30,7 @@ use alloc::boxed::Box;
 
 use crate::{
     arch::riscv::qemu::layout::{
-        MAXVA, PGSHIFT, PGSIZE, TRAMPOLINE, TRAPFRAME, USTACK_BASE, USTACK_SIZE,
+        HUGE_PGSIZE, MAXVA, PGSHIFT, PGSIZE, TRAMPOLINE, TRAPFRAME, USTACK_BASE, USTACK_SIZE,
     },
     memory::{
         PageAllocator, RawPage, UStack,
@@ -151,6 +151,11 @@ impl PageTable {
         for level in (1..=2).rev() {
             let pte = &mut pgt.entries[va.page_num(level)];
             if pte.is_valid() {
+                // 如果这里带有RWX位，则这是个巨页，避免重新映射
+                if pte.is_read() || pte.is_write() || pte.is_execute() {
+                    return Some(pte);
+                }
+
                 // 这里是安全的，因为已经确认了这个页表项指向已分配的有效物理地址
                 pgt = unsafe { &mut *(pte.as_pagetable()) };
             } else {
@@ -165,6 +170,38 @@ impl PageTable {
             }
         }
         Some(&mut pgt.entries[va.page_num(0)])
+    }
+
+    /// 将虚拟地址翻译为物理地址，返回页表项
+    /// 将alloc设置为true会同时分配相关的页表
+    /// one-layer traverse，必须保证 Pte的12-20位为0，同时有RWX位之一
+    /// TODO: 和translate结合
+    pub fn translate_huge(
+        &mut self,
+        va: VirtualAddress,
+        alloc: bool,
+    ) -> Option<&mut PageTableEntry> {
+        if va.as_usize() > MAXVA {
+            return None;
+        }
+
+        let mut pgt = self;
+        let pte = &mut pgt.entries[va.page_num(2)];
+        if pte.is_valid() {
+            // 这里是安全的，因为已经确认了这个页表项指向已分配的有效物理地址
+            pgt = unsafe { &mut *(pte.as_pagetable()) };
+        } else {
+            if !alloc {
+                return None;
+            }
+            // 这里分配一个页面
+            let zeroed_pgt = unsafe { Box::<PageTable>::new_zeroed().assume_init() };
+            pte.write_perm(PhysicalAddress(zeroed_pgt.as_addr()), PteFlags::empty());
+            // 之后需要手动管理这个页面
+            pgt = Box::leak(zeroed_pgt);
+        }
+
+        Some(&mut pgt.entries[va.page_num(1)])
     }
 
     /// 在给定页表上将虚拟地址转为物理地址
@@ -222,6 +259,71 @@ impl PageTable {
         true
     }
 
+    /// 同时考虑huge page的页表映射
+    /// TODO: 结合map
+    ///
+    /// # Safety
+    /// 请保证pa是有效可访问的计算机资源
+    pub unsafe fn map_with_huge(
+        &mut self,
+        mut va: VirtualAddress,
+        mut pa: PhysicalAddress,
+        size: usize,
+        perm: PteFlags,
+    ) -> bool {
+        let mut last = VirtualAddress::new(va.as_usize() + size);
+        va.pg_round_down();
+        last.pg_round_up();
+        while va != last {
+            if va.is_hpage_aligned() && last.as_usize() - va.as_usize() >= HUGE_PGSIZE {
+                if let Some(pte) = self.translate_huge(va, true) {
+                    if pte.is_valid() {
+                        println!(
+                            "va: {:#x}, pa: {:#x}, pte: {:#x}",
+                            va.as_usize(),
+                            pa.as_usize(),
+                            pte.0
+                        );
+                        panic!("remap");
+                    }
+
+                    pte.write_perm(pa, perm);
+                    println!(
+                        "map huge page: va: {:#x} pa: {:#x} pte: {:#b}",
+                        va.as_usize(),
+                        pa.as_usize(),
+                        pte.as_usize()
+                    );
+                    va.add_huge_page();
+                    pa.add_huge_page();
+                } else {
+                    return false;
+                }
+                continue;
+            }
+
+            if let Some(pte) = self.translate(va, true) {
+                if pte.is_valid() {
+                    println!(
+                        "va: {:#x}, pa: {:#x}, pte: {:#x}",
+                        va.as_usize(),
+                        pa.as_usize(),
+                        pte.0
+                    );
+                    panic!("remap");
+                }
+
+                pte.write_perm(pa, perm);
+                va.add_page();
+                pa.add_page();
+            } else {
+                return false;
+            }
+        }
+
+        true
+    }
+
     /// 为内核页表添加映射
     ///
     /// # Safety
@@ -238,7 +340,7 @@ impl PageTable {
         perm: PteFlags,
     ) {
         // println!("{:#x} {:#x}", va.as_usize(), pa.as_usize());
-        if !unsafe { self.map(va, pa, size, perm) } {
+        if !unsafe { self.map_with_huge(va, pa, size, perm) } {
             panic!("内核虚拟地址映射失败");
         }
     }
@@ -338,7 +440,7 @@ impl PageTable {
                 VirtualAddress::new(USTACK_BASE - PGSIZE),
                 PhysicalAddress::new(addr),
                 PGSIZE,
-                PteFlags::empty(),
+                PteFlags::R,
             ) {
                 self.uunmap(VirtualAddress::new(USTACK_BASE), USTACK_SIZE / PGSIZE, true);
                 guard.drop();
