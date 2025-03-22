@@ -20,6 +20,7 @@ use crate::{
         virtio_disk::DISK,
     },
     lock::Mutex,
+    memory::address::VirtualAddress,
     println,
     process::{
         cpu::{self, CPUManager, cpuid},
@@ -104,6 +105,11 @@ pub unsafe fn user_trap() {
             }
             scause::Trap::Exception(Exception::StorePageFault) => {
                 // CoW here
+                let pgt = unsafe { p.data.as_mut_unchecked().pagetable.as_deref_mut().unwrap() };
+                if let Err(msg) = unsafe { pgt.uload_page(VirtualAddress::new(stval::read())) } {
+                    println!("[RX-OS] load page: {}", msg);
+                    p.set_killed(true);
+                }
             }
             _ => {
                 println!(

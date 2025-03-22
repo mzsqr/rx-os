@@ -79,18 +79,20 @@ impl ProcManager {
     /// 初始化内核页表后调用
     pub unsafe fn proc_mapstacks(&self) {
         for i in 0..self.proc.len() {
-            let pa = unsafe { Stack::new_zeroed() };
-            let pa = pa as *mut Stack as usize;
-            let va = kernel_stack(i);
+            for j in 0..STACK_SIZE / PGSIZE {
+                let pa = unsafe { RawPage::new_zeroed() };
+                let pa = pa as *mut RawPage as usize;
+                let va = kernel_stack(i) + j * PGSIZE;
 
-            unsafe {
-                KERNEL_PAGETABLE.pgt.as_mut_unchecked().kernel_map(
-                    VirtualAddress::new(va),
-                    PhysicalAddress::new(pa),
-                    STACK_SIZE,
-                    PteFlags::R | PteFlags::W,
-                )
-            };
+                unsafe {
+                    KERNEL_PAGETABLE.pgt.as_mut_unchecked().kernel_map(
+                        VirtualAddress::new(va),
+                        PhysicalAddress::new(pa),
+                        PGSIZE,
+                        PteFlags::R | PteFlags::W,
+                    )
+                };
+            }
         }
     }
 

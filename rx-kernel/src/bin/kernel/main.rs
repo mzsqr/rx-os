@@ -141,7 +141,8 @@ unsafe extern "C" fn rust_main() {
             println!("{}", LOGO);
             println!("rx-os kernel is booting!");
 
-            memory::kalloc::init();
+            // memory::kalloc::init();
+            memory::kalloc_rc::init();
             #[cfg(test)]
             test_main();
             memory::mapping::kernel_map::init();
