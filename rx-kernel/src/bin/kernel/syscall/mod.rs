@@ -14,6 +14,7 @@ use crate::{
 
 mod file;
 mod proc;
+mod signal;
 
 #[inline]
 pub fn kernel_env_call(which: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {
@@ -69,7 +70,7 @@ impl Syscall<'_> {
             SyscallNum::SysGetPid => self.sys_getpid(),
             SyscallNum::SysSbrk => self.sys_sbrk(),
             SyscallNum::SysSleep => self.sys_sleep(),
-            SyscallNum::SysUptime => Ok(0),
+            SyscallNum::SysUptime => self.sys_uptime(),
             SyscallNum::SysOpen => self.sys_open(),
             SyscallNum::SysWrite => self.sys_write(),
             SyscallNum::SysMknod => self.sys_mknod(),

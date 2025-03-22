@@ -288,12 +288,6 @@ impl PageTable {
                     }
 
                     pte.write_perm(pa, perm);
-                    println!(
-                        "map huge page: va: {:#x} pa: {:#x} pte: {:#b}",
-                        va.as_usize(),
-                        pa.as_usize(),
-                        pte.as_usize()
-                    );
                     va.add_huge_page();
                     pa.add_huge_page();
                 } else {
