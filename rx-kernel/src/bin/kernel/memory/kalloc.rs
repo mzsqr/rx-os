@@ -14,7 +14,7 @@ use crate::{arch::riscv::qemu::layout::PHYSTOP, asm::end, println};
 
 use super::mapping::page_round_up;
 
-#[global_allocator]
+// #[global_allocator]
 pub static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 #[alloc_error_handler]

@@ -17,6 +17,7 @@ use crate::{
 
 pub mod address;
 pub mod kalloc;
+pub mod kalloc_rc;
 pub mod mapping;
 
 pub trait PageAllocator: Sized {
