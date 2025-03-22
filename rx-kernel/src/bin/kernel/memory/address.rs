@@ -4,7 +4,7 @@ use core::cmp::PartialEq;
 use core::convert::From;
 use core::ops::{Add, Sub};
 
-use crate::arch::riscv::qemu::layout::{PGMASK, PGMASKLEN, PGSHIFT, PGSIZE};
+use crate::arch::riscv::qemu::layout::{HUGE_PGSIZE, PGMASK, PGMASKLEN, PGSHIFT, PGSIZE};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct PhysicalAddress(pub usize);
@@ -22,6 +22,11 @@ pub trait Addr {
     #[inline]
     fn is_page_aligned(&self) -> bool {
         self.as_usize() % PGSIZE == 0
+    }
+
+    #[inline]
+    fn is_hpage_aligned(&self) -> bool {
+        self.as_usize() % HUGE_PGSIZE == 0
     }
 
     #[inline]
@@ -45,8 +50,23 @@ pub trait Addr {
     }
 
     #[inline]
+    fn hpg_round_down(&mut self) {
+        *self.data_mut() = *self.data_mut() & !(HUGE_PGSIZE - 1);
+    }
+
+    #[inline]
+    fn hpg_round_up(&mut self) {
+        *self.data_mut() = (*self.data_mut() + HUGE_PGSIZE - 1) & !(HUGE_PGSIZE - 1)
+    }
+
+    #[inline]
     fn add_page(&mut self) {
         *self.data_mut() += PGSIZE;
+    }
+
+    #[inline]
+    fn add_huge_page(&mut self) {
+        *self.data_mut() += HUGE_PGSIZE;
     }
 }
 

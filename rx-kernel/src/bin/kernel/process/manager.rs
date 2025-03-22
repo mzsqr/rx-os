@@ -5,7 +5,7 @@ use array_macro::array;
 use spin::Once;
 
 use crate::arch::riscv::qemu::fs::ROOTIPATH;
-use crate::arch::riscv::qemu::layout::{STACK_SIZE, TRAPFRAME};
+use crate::arch::riscv::qemu::layout::{STACK_SIZE, TRAPFRAME, USTACK_BASE, USTACK_SIZE};
 use crate::fs::inode::ICACHE;
 use crate::fs::log::Log;
 use crate::lock::Mutex;
@@ -35,6 +35,11 @@ pub struct ProcManager {
     init_proc: Once<usize>,
     // 每个进程的父进程
     pub wait_list: Mutex<[usize; NPROC]>,
+    // 透过idx索引进程号，注册时和结束时修改自己的位
+    // 运行时会被并发访问
+    // 访问远多于写入
+    // TODO: 采用读写锁
+    pub idx_pids: Mutex<[usize; NPROC]>,
 }
 
 pub static PROC_MANAGER: ProcManager = ProcManager::new();
@@ -46,6 +51,7 @@ impl ProcManager {
             pids: AtomicUsize::new(0),
             init_proc: Once::new(),
             wait_list: Mutex::new([0; NPROC], "Wait List"),
+            idx_pids: Mutex::new([NPROC; NPROC], "idx_pids"),
         }
     }
 
@@ -124,7 +130,8 @@ impl ProcManager {
 
             let tf = unsafe { &mut *pdata.trapframe };
             tf.epc = 0;
-            tf.sp = PGSIZE;
+            // tf.sp = PGSIZE;
+            tf.sp = USTACK_BASE + USTACK_SIZE;
             pdata.set_name("initprog\0".as_bytes());
             pdata.cwd = Some(ICACHE.namei(&ROOTIPATH).expect("cannot find root inode"));
             p.meta
@@ -156,6 +163,7 @@ impl ProcManager {
                 pdata.set_trapframe(tf as *mut RawPage as *mut Trapframe);
                 pdata.pagetable = proc.proc_pagetable();
                 pdata.init_context();
+                self.idx_pids.lock()[pdata.id] = pid;
                 return Some(proc);
             }
         }
@@ -201,6 +209,7 @@ impl ProcManager {
     pub fn exit(&self, status: usize) -> ! {
         let myproc = unsafe { CPUManager::myproc().expect("Curretn Process has no cpu") };
         let pdata = unsafe { myproc.data.as_mut_unchecked() };
+        self.idx_pids.lock()[pdata.id] = NPROC; // 所有进程都无法在传递信号量
         for fd in &mut pdata.open_files {
             let _ = fd.take();
         }
@@ -255,6 +264,7 @@ impl ProcManager {
                         }
                         drop(pmeta);
                         p.free_proc();
+
                         drop(wg);
                         return Some(pid);
                     }

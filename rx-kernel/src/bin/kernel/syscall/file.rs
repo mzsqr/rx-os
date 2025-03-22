@@ -7,6 +7,7 @@ use core::{
 use alloc::{boxed::Box, sync::Arc};
 use array_macro::array;
 use bit_field::BitField;
+use rx_kernel::fs::InodeType;
 
 use crate::{
     arch::riscv::qemu::{
@@ -15,9 +16,8 @@ use crate::{
         param::{MAXARG, MAXPATH},
     },
     fs::{
-        dinode::InodeType,
         file::{FileType, VFile},
-        inode::{self, ICACHE},
+        inode::ICACHE,
         log::Log,
         pipe::Pipe,
     },
@@ -242,8 +242,6 @@ impl Syscall<'_> {
         Log::end_op();
         Err(())
     }
-
-    // TODO: pipe
 
     pub fn sys_mkdir(&self) -> SysResult {
         let mut path = [0_u8; MAXPATH];

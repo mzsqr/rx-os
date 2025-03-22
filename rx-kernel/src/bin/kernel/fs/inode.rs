@@ -8,6 +8,8 @@ use core::{
 
 use array_macro::array;
 
+use rx_kernel::fs::InodeType;
+
 use crate::{
     arch::riscv::qemu::fs::{BSIZE, DIRSIZ, NDIRECT, NINDIRECT, NINODE, ROOTDEV, ROOTINUM},
     lock::{Mutex, SleepMutex, SleepMutexGuard},
@@ -19,7 +21,7 @@ use crate::{
 use super::{
     bio::BCache,
     bitmap::BitMap,
-    dinode::{DirEntry, DiskInode, InodeType},
+    dinode::{DirEntry, DiskInode},
     log::Log,
     stat::Stat,
     superblock::SuperBlock,

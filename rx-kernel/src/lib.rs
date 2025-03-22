@@ -20,6 +20,7 @@
 
 use syscall::exit;
 
+pub mod fs;
 pub mod syscall;
 
 unsafe extern "Rust" {

@@ -35,6 +35,7 @@ pub mod cpu;
 pub mod elf;
 pub mod manager;
 pub mod process;
+pub mod signal;
 pub mod trapframe;
 
 static INITCODE: &[u8] = &[

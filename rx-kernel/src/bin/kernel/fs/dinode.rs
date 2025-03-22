@@ -2,6 +2,8 @@
 
 use core::ptr;
 
+use rx_kernel::fs::InodeType;
+
 use crate::{
     arch::riscv::qemu::fs::{DIRSIZ, IPB, NDIRECT},
     fs::{bio::BCache, log::Log, superblock::SuperBlock},
@@ -12,15 +14,6 @@ use super::bio::Buf;
 #[inline]
 fn locate_inode_offset(inum: u32) -> isize {
     inum as isize % IPB as isize
-}
-
-#[repr(u16)]
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum InodeType {
-    Empty = 0,
-    Directory = 1,
-    File = 2,
-    Device = 3,
 }
 
 /// On-disk inode structure

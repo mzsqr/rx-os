@@ -5,6 +5,7 @@
 			"riscv64gc-unknown-none-elf"
 	],
 	"files.associations": {
-		"param.h": "c"
+		"param.h": "c",
+		"signal.h": "c"
 	}
 }

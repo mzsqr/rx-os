@@ -102,6 +102,9 @@ pub unsafe fn user_trap() {
 
                 syscall_handler();
             }
+            scause::Trap::Exception(Exception::StorePageFault) => {
+                // CoW here
+            }
             _ => {
                 println!(
                     "usertrap: unexpected scacuse: {:?}\n pid: {}",
@@ -267,6 +270,11 @@ pub unsafe fn kernel_trap(
 
 pub unsafe fn clock_intr() {
     if unsafe { cpuid() == 0 } {
-        let _ = TICKS.lock().add(1);
+        *TICKS.lock() += 1;
     }
+}
+
+/// in seconds
+pub fn uptime() -> usize {
+    *TICKS.lock() / 10
 }

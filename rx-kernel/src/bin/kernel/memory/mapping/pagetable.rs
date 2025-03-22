@@ -29,9 +29,11 @@ use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 use alloc::boxed::Box;
 
 use crate::{
-    arch::riscv::qemu::layout::{MAXVA, PGSHIFT, PGSIZE, TRAMPOLINE, TRAPFRAME},
+    arch::riscv::qemu::layout::{
+        HUGE_PGSIZE, MAXVA, PGSHIFT, PGSIZE, TRAMPOLINE, TRAPFRAME, USTACK_BASE, USTACK_SIZE,
+    },
     memory::{
-        PageAllocator, RawPage,
+        PageAllocator, RawPage, UStack,
         address::{Addr, PhysicalAddress, VirtualAddress},
     },
     println,
@@ -149,6 +151,11 @@ impl PageTable {
         for level in (1..=2).rev() {
             let pte = &mut pgt.entries[va.page_num(level)];
             if pte.is_valid() {
+                // 如果这里带有RWX位，则这是个巨页，避免重新映射
+                if pte.is_read() || pte.is_write() || pte.is_execute() {
+                    return Some(pte);
+                }
+
                 // 这里是安全的，因为已经确认了这个页表项指向已分配的有效物理地址
                 pgt = unsafe { &mut *(pte.as_pagetable()) };
             } else {
@@ -163,6 +170,38 @@ impl PageTable {
             }
         }
         Some(&mut pgt.entries[va.page_num(0)])
+    }
+
+    /// 将虚拟地址翻译为物理地址，返回页表项
+    /// 将alloc设置为true会同时分配相关的页表
+    /// one-layer traverse，必须保证 Pte的12-20位为0，同时有RWX位之一
+    /// TODO: 和translate结合
+    pub fn translate_huge(
+        &mut self,
+        va: VirtualAddress,
+        alloc: bool,
+    ) -> Option<&mut PageTableEntry> {
+        if va.as_usize() > MAXVA {
+            return None;
+        }
+
+        let mut pgt = self;
+        let pte = &mut pgt.entries[va.page_num(2)];
+        if pte.is_valid() {
+            // 这里是安全的，因为已经确认了这个页表项指向已分配的有效物理地址
+            pgt = unsafe { &mut *(pte.as_pagetable()) };
+        } else {
+            if !alloc {
+                return None;
+            }
+            // 这里分配一个页面
+            let zeroed_pgt = unsafe { Box::<PageTable>::new_zeroed().assume_init() };
+            pte.write_perm(PhysicalAddress(zeroed_pgt.as_addr()), PteFlags::empty());
+            // 之后需要手动管理这个页面
+            pgt = Box::leak(zeroed_pgt);
+        }
+
+        Some(&mut pgt.entries[va.page_num(1)])
     }
 
     /// 在给定页表上将虚拟地址转为物理地址
@@ -220,6 +259,65 @@ impl PageTable {
         true
     }
 
+    /// 同时考虑huge page的页表映射
+    /// TODO: 结合map
+    ///
+    /// # Safety
+    /// 请保证pa是有效可访问的计算机资源
+    pub unsafe fn map_with_huge(
+        &mut self,
+        mut va: VirtualAddress,
+        mut pa: PhysicalAddress,
+        size: usize,
+        perm: PteFlags,
+    ) -> bool {
+        let mut last = VirtualAddress::new(va.as_usize() + size);
+        va.pg_round_down();
+        last.pg_round_up();
+        while va != last {
+            if va.is_hpage_aligned() && last.as_usize() - va.as_usize() >= HUGE_PGSIZE {
+                if let Some(pte) = self.translate_huge(va, true) {
+                    if pte.is_valid() {
+                        println!(
+                            "va: {:#x}, pa: {:#x}, pte: {:#x}",
+                            va.as_usize(),
+                            pa.as_usize(),
+                            pte.0
+                        );
+                        panic!("remap");
+                    }
+
+                    pte.write_perm(pa, perm);
+                    va.add_huge_page();
+                    pa.add_huge_page();
+                } else {
+                    return false;
+                }
+                continue;
+            }
+
+            if let Some(pte) = self.translate(va, true) {
+                if pte.is_valid() {
+                    println!(
+                        "va: {:#x}, pa: {:#x}, pte: {:#x}",
+                        va.as_usize(),
+                        pa.as_usize(),
+                        pte.0
+                    );
+                    panic!("remap");
+                }
+
+                pte.write_perm(pa, perm);
+                va.add_page();
+                pa.add_page();
+            } else {
+                return false;
+            }
+        }
+
+        true
+    }
+
     /// 为内核页表添加映射
     ///
     /// # Safety
@@ -236,7 +334,7 @@ impl PageTable {
         perm: PteFlags,
     ) {
         // println!("{:#x} {:#x}", va.as_usize(), pa.as_usize());
-        if !unsafe { self.map(va, pa, size, perm) } {
+        if !unsafe { self.map_with_huge(va, pa, size, perm) } {
             panic!("内核虚拟地址映射失败");
         }
     }
@@ -269,6 +367,8 @@ impl PageTable {
                 PteFlags::R | PteFlags::W | PteFlags::X | PteFlags::U,
             );
         }
+
+        self.ualloc_stack();
 
         mem.data[..src.len()].copy_from_slice(src);
     }
@@ -306,6 +406,63 @@ impl PageTable {
         }
 
         Some(new_size)
+    }
+
+    pub fn ualloc_stack(&mut self) -> bool {
+        let mem = unsafe { UStack::new_zeroed() };
+        let addr = mem as *const UStack as usize;
+        mem.data.fill(0);
+
+        unsafe {
+            if !self.map(
+                VirtualAddress::new(USTACK_BASE),
+                PhysicalAddress::new(addr),
+                USTACK_SIZE,
+                // FIXME: custom perm
+                PteFlags::W | PteFlags::R | PteFlags::U,
+            ) {
+                mem.drop();
+                return false;
+            }
+        }
+
+        let guard = unsafe { RawPage::new_zeroed() };
+        let addr = guard as *const RawPage as usize;
+
+        unsafe {
+            if !self.map(
+                VirtualAddress::new(USTACK_BASE - PGSIZE),
+                PhysicalAddress::new(addr),
+                PGSIZE,
+                PteFlags::R,
+            ) {
+                self.uunmap(VirtualAddress::new(USTACK_BASE), USTACK_SIZE / PGSIZE, true);
+                guard.drop();
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn ufree_stack(&mut self) {
+        self.uunmap(
+            VirtualAddress(USTACK_BASE - PGSIZE),
+            USTACK_SIZE / PGSIZE + 1,
+            true,
+        );
+    }
+
+    pub fn ucopy_stack(&mut self, other: &mut Self) {
+        unsafe {
+            // TODO: DON'T COPY GUARD
+            self.ucopy(
+                other,
+                VirtualAddress::new(USTACK_BASE - PGSIZE),
+                USTACK_SIZE + PGSIZE,
+            )
+            .unwrap()
+        }
     }
 
     /// 释放用户内存页面
@@ -370,12 +527,19 @@ impl PageTable {
 
     /// 根据父进程的页表信息将父进程的内存拷贝给子进程并映射
     /// 失败时会自动释放内存
+    /// self --> other
     ///
     /// # Safety
     /// TODO:
-    pub unsafe fn ucopy(&mut self, other: &mut Self, size: usize) -> Result<(), &'static str> {
-        let mut va = VirtualAddress::new(0);
-        while va.as_usize() != size {
+    pub unsafe fn ucopy(
+        &mut self,
+        other: &mut Self,
+        mut va: VirtualAddress,
+        size: usize,
+    ) -> Result<(), &'static str> {
+        // let mut va = VirtualAddress::new(0);
+        let start = va.as_usize();
+        while va.as_usize() != size + start {
             if let Some(pte) = self.translate(va, false) {
                 if !pte.is_valid() {
                     panic!("ucopy: page not present");
@@ -517,6 +681,7 @@ impl PageTable {
     }
 
     pub fn proc_free_pagetable(&mut self, size: usize) {
+        self.ufree_stack();
         // TODO: 或者这个放在进程表中
         self.uunmap(VirtualAddress::new(TRAMPOLINE), 1, false);
         self.uunmap(VirtualAddress::new(TRAPFRAME), 1, false);

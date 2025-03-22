@@ -14,7 +14,10 @@ use core::ptr::drop_in_place;
 
 use bitflags::bitflags;
 
-use crate::memory::address::{Addr, PhysicalAddress};
+use crate::memory::{
+    HugePage,
+    address::{Addr, PhysicalAddress},
+};
 
 use super::pagetable::PageTable;
 
@@ -128,6 +131,11 @@ impl PageTableEntry {
     #[inline]
     pub fn as_pagetable(&self) -> *mut PageTable {
         ((self.0 >> 10) << 12) as *mut PageTable
+    }
+
+    #[inline]
+    pub fn as_huge_page(&self) -> *mut HugePage {
+        ((self.0 >> 10) << (12 + 9)) as *mut HugePage
     }
 
     // implement PA2PTE

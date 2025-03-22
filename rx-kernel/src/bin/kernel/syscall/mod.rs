@@ -1,3 +1,9 @@
+//! 处理系统调用核心功能的入口，由trap模块调用。
+//! 用户空间通过ecall进入内核时：
+//!     将调用约定的参数放在a0-a5寄存器中，将系统调用号放在a7寄存器中。
+//!     在跳板代码中将这些参数保存到trapframe中。
+//!     本模块通过这些参数信息再调用系统提供的具体功能。
+
 use num_enum::FromPrimitive;
 use rx_kernel::syscall::SyscallNum;
 
@@ -8,6 +14,7 @@ use crate::{
 
 mod file;
 mod proc;
+mod signal;
 
 #[inline]
 pub fn kernel_env_call(which: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {
@@ -63,7 +70,7 @@ impl Syscall<'_> {
             SyscallNum::SysGetPid => self.sys_getpid(),
             SyscallNum::SysSbrk => self.sys_sbrk(),
             SyscallNum::SysSleep => self.sys_sleep(),
-            SyscallNum::SysUptime => Ok(0),
+            SyscallNum::SysUptime => self.sys_uptime(),
             SyscallNum::SysOpen => self.sys_open(),
             SyscallNum::SysWrite => self.sys_write(),
             SyscallNum::SysMknod => self.sys_mknod(),
