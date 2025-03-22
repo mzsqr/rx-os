@@ -1,4 +1,4 @@
-use core::{cell::UnsafeCell, ptr::null_mut};
+use core::{cell::UnsafeCell, ptr::null_mut, str::from_utf8};
 
 use crate::{
     arch::riscv::qemu::{fs::NFILE, layout::STACK_SIZE},

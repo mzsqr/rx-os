@@ -102,6 +102,9 @@ pub unsafe fn user_trap() {
 
                 syscall_handler();
             }
+            scause::Trap::Exception(Exception::StorePageFault) => {
+                // CoW here
+            }
             _ => {
                 println!(
                     "usertrap: unexpected scacuse: {:?}\n pid: {}",
