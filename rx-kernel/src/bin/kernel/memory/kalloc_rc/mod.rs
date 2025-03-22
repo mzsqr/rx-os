@@ -3,7 +3,7 @@
 use core::{alloc::GlobalAlloc, ptr::null_mut};
 
 use crate::{
-    arch::riscv::qemu::layout::{PGSIZE, PHYSTOP},
+    arch::riscv::qemu::layout::{KERNEL_BASE, PGSIZE, PHYSTOP},
     asm::end,
     lock::Mutex,
     memory::mapping::page_round_up,
@@ -22,6 +22,7 @@ pub struct LockedAllocator(Mutex<LinkedListAllocator>);
 
 struct LinkedListAllocator {
     head: Option<&'static mut Run>,
+    count: [i32; (PHYSTOP - KERNEL_BASE) / PGSIZE],
 }
 
 struct Run {
@@ -30,7 +31,10 @@ struct Run {
 
 impl LinkedListAllocator {
     const fn new() -> Self {
-        Self { head: None }
+        Self {
+            head: None,
+            count: [0; (PHYSTOP - KERNEL_BASE) / PGSIZE],
+        }
     }
 
     fn init(&mut self) {
@@ -57,7 +61,10 @@ unsafe impl GlobalAlloc for LockedAllocator {
         assert!(layout.size() <= 0x1000);
 
         let mut g = self.0.lock();
+
         if let Some(node) = g.head.take() {
+            let idx = (node as *mut _ as usize - KERNEL_BASE) / PGSIZE;
+            g.count[idx] = 1;
             g.head = node.next.take();
             node as *mut Run as *mut u8
         } else {
@@ -72,9 +79,25 @@ unsafe impl GlobalAlloc for LockedAllocator {
 
         let mut g = self.0.lock();
         let head = ptr as *mut Run;
-        unsafe {
-            (*head).next = g.head.take();
-            g.head = Some(&mut *head);
+        let idx = (head as usize - KERNEL_BASE) / PGSIZE;
+        g.count[idx] -= 1;
+        if g.count[idx] == 0 {
+            unsafe {
+                (*head).next = g.head.take();
+                g.head = Some(&mut *head);
+            }
         }
+    }
+}
+
+impl LockedAllocator {
+    pub fn add_count(&self, pa: usize) {
+        let idx = (pa - KERNEL_BASE) / PGSIZE;
+        self.0.lock().count[idx] += 1;
+    }
+
+    pub fn get_count(&self, pa: usize) -> i32 {
+        let idx = (pa - KERNEL_BASE) / PGSIZE;
+        self.0.lock().count[idx]
     }
 }

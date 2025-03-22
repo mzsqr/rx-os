@@ -47,7 +47,7 @@ bitflags! {
         const G = PTE_G;
         const A = PTE_A;
         const D = PTE_D;
-        const RS1 = PTE_RS1;
+        const RS1 = PTE_RS1; // for CoW page
         const RS2 = PTE_RS2;
     }
 
@@ -125,6 +125,17 @@ impl PageTableEntry {
     #[inline]
     pub fn rm_user_bit(&mut self) {
         self.0 &= !(PteFlags::U.bits());
+    }
+
+    #[inline]
+    pub fn to_cow_page(&mut self) {
+        self.0 &= !(PteFlags::W.bits());
+        self.0 |= PteFlags::RS1.bits();
+    }
+
+    #[inline]
+    pub fn add_write_bit(&mut self) {
+        self.0 |= PteFlags::W.bits();
     }
 
     // implement PTE2PA

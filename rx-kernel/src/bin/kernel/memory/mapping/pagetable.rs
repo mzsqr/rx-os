@@ -35,6 +35,7 @@ use crate::{
     memory::{
         PageAllocator, RawPage, UStack,
         address::{Addr, PhysicalAddress, VirtualAddress},
+        kalloc_rc::SIMPLE_ALLOCATOR,
     },
     println,
 };
@@ -571,6 +572,75 @@ impl PageTable {
         }
 
         Ok(())
+    }
+
+    /// 根据父进程的页表信息将父进程的内存映射给子进程，并不拷贝实际内容
+    /// self --> other
+    ///
+    /// # Safety
+    /// TODO:
+    pub unsafe fn ucopy_nocopy(
+        &mut self,
+        other: &mut Self,
+        mut va: VirtualAddress,
+        size: usize,
+    ) -> Result<(), &'static str> {
+        // let mut va = VirtualAddress::new(0);
+        let start = va.as_usize();
+        while va.as_usize() != size + start {
+            if let Some(pte) = self.translate(va, false) {
+                if !pte.is_valid() {
+                    panic!("ucopy: page not present");
+                }
+
+                pte.to_cow_page();
+                let pa = pte.as_pagetable() as usize;
+                SIMPLE_ALLOCATOR.add_count(pa);
+
+                let flags = pte.as_flags();
+                let flags = PteFlags::new(flags);
+
+                // let mut alloc_pgt = Box::new(PageTable::empty());
+                // alloc_pgt
+                //     .entries
+                //     .copy_from_slice(unsafe { &(*pgt).entries });
+
+                if !unsafe { other.map(va, PhysicalAddress::new(pa), PGSIZE, flags) } {
+                    // alloc_pgt will be deallocate because we do not leak it
+                    // free will decrease idx
+                    other.uunmap(VirtualAddress::new(0), va.as_usize() / PGSIZE, true);
+                    return Err("ucopy: Failed.");
+                }
+            } else {
+                panic!("ucopy: No exist pte(pte should exist)");
+            }
+
+            va.add_page();
+        }
+
+        Ok(())
+    }
+
+    pub unsafe fn uload_page(&mut self, va: VirtualAddress) -> Result<(), &'static str> {
+        if let Some(pte) = self.translate(va, false) {
+            let pa = pte.as_pagetable() as usize;
+            if SIMPLE_ALLOCATOR.get_count(pa) == 1 {
+                pte.add_write_bit();
+                return Ok(());
+            }
+            // I want decrease a count
+            let prev_page = unsafe { Box::from_raw(pa as *mut RawPage) };
+            let new_page = unsafe { RawPage::new_zeroed() };
+            new_page.data.copy_from_slice(&prev_page.data);
+
+            let pa = PhysicalAddress::new(new_page as *mut _ as usize);
+            let perm = PteFlags::from_bits_truncate(pte.as_usize() | PteFlags::W.bits());
+
+            pte.write_perm(pa, perm);
+            Ok(())
+        } else {
+            Err("Read illegal address.")
+        }
     }
 
     /// 清除va对应虚拟地址的表项中的User位
