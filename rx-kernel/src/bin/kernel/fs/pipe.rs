@@ -1,12 +1,10 @@
-use core::cell::Cell;
+use core::sync::atomic::AtomicU32;
 
 use alloc::{boxed::Box, sync::Arc};
 
 use crate::{
-    arch::riscv::qemu::layout::PGSIZE,
     lock::{Mutex, MutexGuard},
     memory::{PageAllocator, RawPage},
-    println,
     process::{cpu::CPUManager, manager::PROC_MANAGER},
 };
 
@@ -22,11 +20,15 @@ pub struct PipeInner {
     writeopen: bool,
 }
 
-pub type Pipe = Mutex<*mut PipeInner>;
+#[derive(Debug)]
+pub struct Pipe(Mutex<*mut PipeInner>);
+
+unsafe impl Send for Pipe {}
+unsafe impl Sync for Pipe {}
 
 impl Clone for Pipe {
     fn clone(&self) -> Self {
-        Mutex::new(unsafe { *self.as_ptr() }, "Pipe")
+        Self(Mutex::new(unsafe { *self.0.as_ptr() }, "Pipe"))
     }
 }
 
@@ -44,14 +46,14 @@ impl Pipe {
             pi.nread = 0;
             pi.nwrite = 0;
         }
-        let pipe = Mutex::new(pi, "Pipe");
+        let pipe = Pipe(Mutex::new(pi, "Pipe"));
         let vread = Arc::new(VFile {
             ftype: FileType::Pipe,
             readable: true,
             writeable: false,
             pipe: Some(pipe.clone()),
             inode: None,
-            offset: Cell::new(0),
+            offset: AtomicU32::new(0),
             major: 0,
         });
         let vwrite = Arc::new(VFile {
@@ -60,7 +62,7 @@ impl Pipe {
             writeable: true,
             pipe: Some(pipe.clone()),
             inode: None,
-            offset: Cell::new(0),
+            offset: AtomicU32::new(0),
             major: 0,
         });
 
@@ -68,7 +70,7 @@ impl Pipe {
     }
 
     pub fn close(&self, writeable: bool) {
-        let mut g = self.lock();
+        let mut g = self.0.lock();
         let pipe = unsafe { &mut **g };
         if writeable {
             pipe.writeopen = false;
@@ -95,7 +97,7 @@ impl Pipe {
                 .unwrap()
         };
 
-        let mut g = self.lock();
+        let mut g = self.0.lock();
         let mut inner = unsafe { &mut **g };
         let mut i = 0;
         while i < n {
@@ -105,7 +107,7 @@ impl Pipe {
             if inner.nwrite == inner.nread + PIPESIZE {
                 PROC_MANAGER.wake_up(&inner.nread as *const _ as usize);
                 proc.sleep(&inner.nwrite as *const _ as usize, g);
-                g = self.lock();
+                g = self.0.lock();
                 inner = unsafe { &mut **g };
             } else {
                 let mut ch = [0u8; 1];
@@ -130,14 +132,14 @@ impl Pipe {
                 .unwrap()
         };
 
-        let mut g = self.lock();
+        let mut g = self.0.lock();
         let mut inner = unsafe { &mut **g };
         while inner.nread == inner.nwrite && inner.writeopen {
             if proc.killed() {
                 return Err("This proc is killed");
             }
             proc.sleep(&inner.nread as *const _ as usize, g);
-            g = self.lock();
+            g = self.0.lock();
             inner = unsafe { &mut **g };
         }
         let mut i = 0;

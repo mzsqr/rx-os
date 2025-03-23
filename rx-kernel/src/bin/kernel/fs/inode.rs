@@ -358,7 +358,7 @@ impl InodeData {
             }
         } else if offset_bn < NINDIRECT + NDIRECT {
             offset_bn -= NDIRECT;
-            if self.dinode.addrs[NDIRECT] != 0 {
+            if self.dinode.addrs[NDIRECT] == 0 {
                 let addr_buf_num = BitMap::alloc(self.dev);
                 self.dinode.addrs[NDIRECT] = addr_buf_num;
             }
@@ -384,9 +384,15 @@ impl InodeData {
         count: u32,
     ) -> Result<usize, &'static str> {
         let end = offset.checked_add(count).ok_or("Failed to add count.")?;
-        if end > self.dinode.size {
-            return Err("inode read: end is more than diskinode's size");
-        }
+        // if end > self.dinode.size {
+        //     return Err("inode read: end is more than diskinode's size");
+        // }
+
+        let count = if end > self.dinode.size {
+            self.dinode.size - offset
+        } else {
+            count
+        };
 
         let mut total = 0;
         let count = count as usize;

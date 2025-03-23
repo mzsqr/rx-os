@@ -30,7 +30,7 @@ pub const ROOTINUM: u32 = 1;
 
 pub const NDIRECT: usize = 12;
 // TODO: BSIZE/size_of::<u32>()
-pub const NINDIRECT: usize = BSIZE / 8;
+pub const NINDIRECT: usize = BSIZE / size_of::<u32>();
 pub const MAXFILE: usize = NDIRECT + NINDIRECT;
 
 /// Directory is a file containing a sequence of dirent structures

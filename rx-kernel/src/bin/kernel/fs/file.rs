@@ -1,4 +1,8 @@
-use core::{cell::Cell, ptr::slice_from_raw_parts};
+use core::{
+    cell::Cell,
+    ptr::slice_from_raw_parts,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use crate::{
     arch::riscv::qemu::{
@@ -33,20 +37,18 @@ pub enum FileInner {
 }
 
 // TODO: Drop
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VFile {
     pub ftype: FileType,
+    /// its not be change now
     pub readable: bool,
     pub writeable: bool,
     pub pipe: Option<Pipe>,
     pub inode: Option<Inode>,
     // TODO: concurrent Safety
-    pub offset: Cell<u32>,
+    pub offset: AtomicU32,
     pub major: i16,
 }
-
-unsafe impl Send for VFile {}
-unsafe impl Sync for VFile {}
 
 impl VFile {
     pub const fn init() -> Self {
@@ -56,7 +58,7 @@ impl VFile {
             writeable: false,
             pipe: None,
             inode: None,
-            offset: Cell::new(0),
+            offset: AtomicU32::new(0),
             major: 0,
         }
     }
@@ -83,8 +85,8 @@ impl VFile {
             FileType::Inode => {
                 let inode = self.inode.as_ref().unwrap();
                 let mut ig = inode.lock();
-                let total = ig.read(true, addr, self.offset.get(), len as u32)?;
-                self.offset.set(self.offset.get() + total as u32);
+                let total = ig.read(true, addr, self.offset.load(Ordering::Relaxed), len as u32)?;
+                self.offset.fetch_add(total as u32, Ordering::Relaxed);
                 drop(ig);
                 Ok(total)
             }
@@ -128,12 +130,16 @@ impl VFile {
                     let inode = self.inode.as_ref().unwrap();
                     let mut ig = inode.lock();
 
-                    let total =
-                        ig.write(true, addr + count, self.offset.get(), write_bytes as u32)?;
+                    let total = ig.write(
+                        true,
+                        addr + count,
+                        self.offset.load(Ordering::Relaxed),
+                        write_bytes as u32,
+                    )?;
                     drop(ig);
                     Log::end_op();
 
-                    self.offset.set(self.offset.get() + total as u32);
+                    self.offset.fetch_add(total as u32, Ordering::Relaxed);
                     count += total;
                 }
                 Ok(count)

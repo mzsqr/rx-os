@@ -126,10 +126,7 @@ impl CPUManager {
         if let Some(my_proc) = unsafe { Self::myproc() } {
             let st = my_proc.meta.lock().state;
             if let ProcState::Running = st {
-                drop(st);
                 my_proc.yielding();
-            } else {
-                drop(st);
             }
         }
     }

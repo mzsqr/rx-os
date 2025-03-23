@@ -2,6 +2,7 @@ use core::{
     cell::Cell,
     ptr::{null_mut, slice_from_raw_parts, slice_from_raw_parts_mut},
     str::from_utf8,
+    sync::atomic::AtomicU32,
 };
 
 use alloc::{boxed::Box, sync::Arc};
@@ -43,7 +44,9 @@ impl Syscall<'_> {
         let file = pdata.open_files[fd].as_ref().unwrap();
         let addr = self.arg(1);
         let len = self.arg(2);
-        file.read(addr, len).map_err(|_| ())
+        file.read(addr, len).map_err(|s| {
+            println!("[Rx-Kernel] Read error: {}", s);
+        })
     }
 
     pub fn sys_write(&self) -> SysResult {
@@ -112,7 +115,7 @@ impl Syscall<'_> {
         file.ftype = if ig.dinode.itype == InodeType::Device {
             FileType::Device
         } else {
-            file.offset = Cell::new(0);
+            file.offset = AtomicU32::new(0);
             FileType::Inode
         };
 
