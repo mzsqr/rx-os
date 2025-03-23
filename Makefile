@@ -1,5 +1,3 @@
-
-
 fs.img: rx-user/*
 	cd rx-user && make fs.img
 # xv6-mkfs/mkfs fs.img README.md $(UEXTRA) $(UPROGS) hello

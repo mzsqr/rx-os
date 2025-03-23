@@ -32,7 +32,6 @@ pub const PTE_D: usize = 1 << 7; // Dirty
 pub const PTE_RS1: usize = 1 << 8; // Reserved
 pub const PTE_RS2: usize = 1 << 9;
 
-// TODO: make sure this struct has the same layout with usize
 #[derive(Debug, Clone, Copy)]
 pub struct PageTableEntry(pub usize);
 
@@ -128,7 +127,7 @@ impl PageTableEntry {
     }
 
     #[inline]
-    pub fn to_cow_page(&mut self) {
+    pub fn cow_page(&mut self) {
         self.0 &= !(PteFlags::W.bits());
         self.0 |= PteFlags::RS1.bits();
     }

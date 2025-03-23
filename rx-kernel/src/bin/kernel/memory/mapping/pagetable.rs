@@ -72,6 +72,7 @@ impl PageTable {
     //     println!("{va:#x} {:#x}", e.as_pagetable() as usize);
     // }
 
+    #[allow(unused)]
     pub fn debug(&self, _level: i32, virt: usize) {
         self.entries.iter().enumerate().for_each(|(idx, e)| {
             let va = (virt << 9) + (idx << 12);
@@ -106,23 +107,12 @@ impl PageTable {
             | ((self.entries.as_ptr() as usize) >> PGSHIFT)
     }
 
-    #[inline]
-    pub fn clear(&mut self) {
-        self.entries.iter_mut().for_each(|x| x.write_zero());
-    }
-
-    pub fn write(&mut self, page_table: &PageTable) {
-        self.entries
-            .iter_mut()
-            .zip(&page_table.entries)
-            .for_each(|(dst, src)| dst.write(src.as_usize()));
-    }
-
     /// 递归地删除页表
     ///
     /// # Safety
     /// 必须保证在此之前将该页表映射的所有页面全部回收
     #[deprecated]
+    #[allow(unused)]
     pub unsafe fn free(&mut self) {
         self.entries.iter_mut().for_each(|e| {
             if e.is_valid() && !e.is_leaf() {
@@ -593,7 +583,7 @@ impl PageTable {
                     panic!("ucopy: page not present");
                 }
 
-                pte.to_cow_page();
+                pte.cow_page();
                 let pa = pte.as_pagetable() as usize;
                 SIMPLE_ALLOCATOR.add_count(pa);
 
@@ -643,16 +633,16 @@ impl PageTable {
         }
     }
 
-    /// 清除va对应虚拟地址的表项中的User位
-    /// 使得用户无法访问该页面
-    /// 用于用户栈的保护页面
-    pub fn uclear(&mut self, va: VirtualAddress) {
-        if let Some(pte) = self.translate(va, false) {
-            pte.rm_user_bit();
-        } else {
-            panic!("uclear: Not found valid pte for virtual address");
-        }
-    }
+    // /// 清除va对应虚拟地址的表项中的User位
+    // /// 使得用户无法访问该页面
+    // /// 用于用户栈的保护页面
+    // pub fn uclear(&mut self, va: VirtualAddress) {
+    //     if let Some(pte) = self.translate(va, false) {
+    //         pte.rm_user_bit();
+    //     } else {
+    //         panic!("uclear: Not found valid pte for virtual address");
+    //     }
+    // }
 
     /// 从内核空间将src指向的内存区域复制到用户空间中。
     /// 拷贝整个src到用户空间。
@@ -770,9 +760,6 @@ impl Drop for PageTable {
                     // 然后又进一步销毁它名下的所有表
                     let _ = Box::from_raw(child_pgt as *mut Self);
                 }
-            } else if e.is_valid() {
-                // FIXME: free from kernel space has bug
-                // panic!("pagetable free(): leaf not be removed");
             }
         });
     }
