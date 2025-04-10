@@ -62,7 +62,7 @@ impl Syscall<'_> {
             SyscallNum::SysWait => self.sys_wait(),
             SyscallNum::SysPipe => self.sys_pipe(),
             SyscallNum::SysRead => self.sys_read(),
-            SyscallNum::SysKill => unimplemented!(),
+            SyscallNum::SysKill => self.sys_kill(),
             SyscallNum::SysExec => self.sys_exec(),
             SyscallNum::SysFstat => self.sys_fstat(),
             SyscallNum::SysChdir => self.sys_chdir(),

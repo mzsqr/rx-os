@@ -25,6 +25,11 @@ impl Syscall<'_> {
         PROC_MANAGER.wait(addr).ok_or(())
     }
 
+    pub fn sys_kill(&self) -> SysResult {
+        self.process.set_killed(true);
+        Ok(0)
+    }
+
     pub fn sys_getpid(&self) -> SysResult {
         Ok(self.process.pid())
     }

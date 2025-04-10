@@ -91,7 +91,7 @@ impl Log {
     }
 
     fn install_trans(&mut self, recovering: bool) {
-        for i in 1..=self.lh.len {
+        for i in 1..self.lh.len {
             let log_buf = BCache::read(self.dev, self.start + i);
 
             let mut disk_buf = BCache::read(self.dev, self.lh.blocknos[i as usize - 1]);

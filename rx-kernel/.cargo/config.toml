@@ -10,6 +10,9 @@ target = "riscv64gc-unknown-none-elf"
 rustflags = [
     "-C", "link-arg=-Trx-kernel/src/bin/kernel/linker/qemu.ld",
 ]
+# rustflags = [
+#     "-C", "link-arg=-Trx-kernel/src/bin/kernel/linker/riscv.lds",
+# ]
 
 
 # runner = """
@@ -26,7 +29,7 @@ rustflags = [
 runner = """
     qemu-system-riscv64 \
     -machine virt -bios none \
-    -m 4G -smp 4  -nographic \
+    -m 1G -smp 4  -nographic \
     -drive file=../fs.img,if=none,format=raw,id=x0 \
     -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
     -device virtio-vga -serial mon:stdio \

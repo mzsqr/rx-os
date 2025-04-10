@@ -93,6 +93,6 @@ UPROGS=\
 uprogs: $(UPROGS)
 
 fs.img: xv6-mkfs/mkfs ../README.md $(UEXTRA) $(UPROGS)
-	cargo rxmkfs xv6-mkfs/mkfs ../fs.img ../README.md $(UEXTRA) $(UPROGS) -- --bins
+	cargo rxmkfs xv6-mkfs/mkfs ../fs.img ../README.md $(UEXTRA) $(UPROGS) -- --bins --release
 # xv6-mkfs/mkfs fs.img README.md $(UEXTRA) $(UPROGS) hello
 

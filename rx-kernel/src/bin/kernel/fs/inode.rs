@@ -15,7 +15,7 @@ use crate::{
     lock::{Mutex, SleepMutex, SleepMutexGuard},
     memory::{copy_from_kernel, copy_to_kernel},
     println,
-    process::cpu::{CPUManager, cpuid},
+    process::cpu::CPUManager,
 };
 
 use super::{
@@ -215,7 +215,7 @@ impl InodeCache {
             inode_g.dinode.nlink += 1;
             inode_g.update();
             inode_g.dir_link(".".as_bytes(), inode.inum)?;
-            inode_g.dir_link("..".as_bytes(), inode.inum)?;
+            inode_g.dir_link("..".as_bytes(), dirinode.inum)?;
         }
 
         dirinode_g
@@ -557,7 +557,7 @@ impl InodeData {
                 .read(
                     false,
                     &mut dir_entry as *mut _ as usize,
-                    offset as u32,
+                    offset,
                     de_size as u32,
                 )
                 .is_err()

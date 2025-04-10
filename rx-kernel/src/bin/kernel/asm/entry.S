@@ -12,7 +12,7 @@ _entry:
     # sp = stack0 + (hartid * 16384)
     # PS: 16KB stack for few stack bump
     la sp, STACK0
-    li a0, 0x4000
+    li a0, 0x10000
 	csrr a1, mhartid
     addi a1, a1, 1
     mul a0, a0, a1
